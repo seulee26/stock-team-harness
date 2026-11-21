@@ -10,6 +10,7 @@ import zipfile
 
 import connectors
 import desk
+import mailer
 import quant
 from toss_client import HarnessError
 
@@ -267,6 +268,65 @@ class DeskJournalTests(unittest.TestCase):
             path.write_text("[]", encoding="utf-8")
             with self.assertRaises(HarnessError):
                 desk.load(path)
+
+
+class MailerTests(unittest.TestCase):
+    def setUp(self):
+        self.work = tempfile.TemporaryDirectory()
+        self.addCleanup(self.work.cleanup)
+        self.report = Path(self.work.name) / "report.html"
+        self.report.write_text("<html><body>report</body></html>", encoding="utf-8")
+        self.sent = []
+        me, app_code = "me@example.com", "abcd efgh ijkl mnop"
+        environment = mock.patch.dict(os.environ, {mailer.ADDRESS_VAR: me, mailer.SECRET_VAR: app_code})
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def transport(self, message, sender, secret):
+        self.sent.append((message, sender, secret))
+
+    def test_preview_never_sends_and_defaults_to_self(self):
+        result = mailer.send([], "모닝 브리프", "오늘 볼 것 세 가지", [self.report], transport=self.transport)
+        self.assertEqual((result["sent"], result["to"], result["outsideRecipients"]), (False, ["me@example.com"], []))
+        self.assertEqual(self.sent, [])
+        self.assertNotIn("abcdefghijklmnop", json.dumps(result))
+
+    def test_confirmed_send_attaches_report_and_disclaimer(self):
+        result = mailer.send(["friend@example.org"], "리포트", "요약", [self.report], confirm=True,
+                             transport=self.transport)
+        message, sender, secret = self.sent[0]
+        self.assertEqual((result["sent"], result["outsideRecipients"]), (True, ["friend@example.org"]))
+        self.assertEqual((sender, secret, message["To"]), ("me@example.com", "abcdefghijklmnop", "friend@example.org"))
+        parts = list(message.iter_attachments())
+        self.assertEqual((parts[0].get_filename(), parts[0].get_content_type()), ("report.html", "text/html"))
+        self.assertIn("투자 조언이나 권유가 아닙니다", message.get_body().get_content())
+
+    def test_bad_input_is_rejected_before_any_send(self):
+        other = Path(self.work.name) / "notes.txt"
+        other.write_text("x", encoding="utf-8")
+        cases = [
+            (["not-an-address"], "제목", "요약", [self.report]),
+            (["a@example.com"] * 2, "제목", "요약", [self.report]),
+            (["a@example.com"], "", "요약", [self.report]),
+            (["a@example.com"], "제목", "요약", [other]),
+            (["a@example.com"], "제목", "요약", [Path(self.work.name) / "missing.pdf"]),
+            (["a@example.com"], "제목", "요약", []),
+        ]
+        for recipients, subject, summary, files in cases:
+            with self.assertRaises(HarnessError):
+                mailer.send(recipients, subject, summary, files, confirm=True, transport=self.transport)
+        with mock.patch.dict(os.environ, {mailer.SECRET_VAR: "short"}):
+            with self.assertRaises(HarnessError):
+                mailer.send([], "제목", "요약", [self.report], confirm=True, transport=self.transport)
+        self.assertEqual(self.sent, [])
+
+    def test_login_failure_is_reported_without_the_secret(self):
+        def refuse(message, sender, secret):
+            raise mailer.smtplib.SMTPAuthenticationError(535, b"bad")
+        with self.assertRaises(HarnessError) as caught:
+            mailer.send([], "제목", "요약", [self.report], confirm=True, transport=refuse)
+        self.assertNotIn("abcdefghijklmnop", str(caught.exception))
+        self.assertEqual(mailer.doctor()["status"], "configured")
 
 
 if __name__ == "__main__":

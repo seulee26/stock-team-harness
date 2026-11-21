@@ -129,7 +129,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     U(["사용자"]) --> AI["Claude Code · us-stock-team 플러그인<br/>또는 Codex · 하네스 폴더 열기"]
-    AI --> SK["스킬 27개"]
+    AI --> SK["스킬 28개"]
     SK --> AG["전문 에이전트 24명"]
     SK --> DK["harness/desk.py<br/>리포트 목록 · 논지 · 의견 정산 · 일정"]
     SK --> QN["harness/quant.py<br/>백테스트 · 수량 계산"]
@@ -158,7 +158,7 @@ flowchart TD
 
 ## Claude Code 플러그인으로 쓰기
 
-이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 27개와 전문 에이전트 24명이 추가됩니다.
+이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 28개와 전문 에이전트 24명이 추가됩니다.
 
 ### 불러오는 방법 두 가지
 
@@ -239,6 +239,7 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 | --- | --- |
 | `stock-harness-start` | 처음 설치했거나 사용법이 궁금할 때 |
 | `research-desk` | 어떤 리포트가 필요한지 고를 때 |
+| `report-email` | 리포트를 Gmail로 받거나 보낼 때 |
 | `stock-data-connections` | 내 데이터 키를 연결할 때 |
 | `stock-bull-bear-review` | 오를 이유와 내릴 이유를 나란히 볼 때 |
 | `stock-valuation-scenarios` | 적정 가격을 세 가지 경우로 계산할 때 |
@@ -248,6 +249,27 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 | `stock-harness-integrations` | 오픈소스 도구 설치 상태를 확인할 때 |
 | `stock-harness-vibe-coding` | 하네스에 기능을 직접 추가할 때 |
 | `editorial-design` | 리포트를 읽기 편하게 다듬을 때 |
+
+### 리포트를 Gmail로 받기
+
+"이 리포트 메일로 보내 줘"라고 하면 받는 사람, 제목, 첨부를 먼저 보여 주고 확인한 뒤에 보냅니다. 받는 사람을 말하지 않으면 나에게 보냅니다.
+
+Gmail 커넥터가 연결된 Claude나 Codex에서는 초안으로 만들어 두고 직접 보내게 합니다. 커넥터가 없으면 하네스가 내 Gmail 계정으로 보냅니다. 이때는 Google 계정의 [앱 비밀번호](https://myaccount.google.com/apppasswords)가 필요합니다.
+
+```sh
+export GMAIL_ADDRESS=<YOUR_ADDRESS>
+export GMAIL_APP_PASSWORD=<YOUR_APP_PASSWORD>
+```
+
+```sh
+# 미리보기 (보내지 않음)
+python3 harness/mailer.py send report.html report.pdf --subject "[기업 분석] NVDA" --summary "결론 두세 줄"
+
+# 확인한 뒤 같은 명령에 --confirm을 붙여 보내기
+python3 harness/mailer.py send report.html report.pdf --subject "[기업 분석] NVDA" --summary "결론 두세 줄" --confirm
+```
+
+앱 비밀번호는 내 터미널에만 넣습니다. 보유 내역이 들어간 포트폴리오 점검 리포트는 본인 주소로만 보내세요.
 
 ### 생각을 기록하고 되짚기
 
@@ -449,6 +471,7 @@ python3 service/launch.py
 | `claude/us-stock-team/` | Claude Code 플러그인 (스킬, 에이전트) |
 | `.agents/skills/`, `.codex/agents/` | Codex용 스킬과 에이전트 |
 | `harness/desk.py` | 리포트 목록, 투자 논지·의견·일정 기록 |
+| `harness/mailer.py` | 리포트를 내 Gmail로 보내기 |
 | `harness/quant.py` | 백테스트와 수량 계산 |
 | `harness/connectors.py` | 데이터 연결 (OpenDART, FRED, 에이전트 스토어 안내) |
 | `harness/integrations.py` | 오픈소스 도구 네 가지 연동 |

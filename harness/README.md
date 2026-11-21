@@ -135,3 +135,17 @@ python3 harness/desk.py event-list --days 30
 - 논지는 근거와 깨지는 조건을 각각 1~5개 적어야 기록됩니다. 한 종목에 열린 논지는 하나입니다.
 - `decision-score`는 의견을 낸 뒤의 수익률에서 비교 지수 수익률을 뺀 초과수익으로 정산합니다. `scorecard`는 의견 등급별 평균 초과수익과 적중률을 보여 줍니다.
 - 가격과 지수 수준은 사용자가 확인한 값을 직접 넣습니다.
+
+## 리포트 메일 보내기
+
+`mailer.py`는 사용자의 Gmail 계정(SMTP, TLS)으로 리포트 파일을 보냅니다. `--confirm` 없이는 미리보기만 출력합니다.
+
+```bash
+python3 harness/mailer.py doctor
+python3 harness/mailer.py send report.html report.pdf --subject "[기업 분석] NVDA" --summary "결론 두세 줄"
+python3 harness/mailer.py send report.html report.pdf --subject "[기업 분석] NVDA" --summary "결론 두세 줄" --confirm
+```
+
+- `GMAIL_ADDRESS`와 `GMAIL_APP_PASSWORD` 환경 변수를 씁니다. 앱 비밀번호는 Google 계정에서 2단계 인증을 켠 뒤 만듭니다.
+- `--to`를 생략하면 본인에게 보냅니다. 받는 사람은 5명, 첨부는 `.html`과 `.pdf` 4개, 합계 20MB까지입니다.
+- 앱 비밀번호는 출력과 오류 문장에 넣지 않습니다.
