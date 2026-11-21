@@ -9,6 +9,7 @@ from unittest import mock
 import zipfile
 
 import connectors
+import desk
 import quant
 from toss_client import HarnessError
 
@@ -195,6 +196,77 @@ class ConnectorTests(unittest.TestCase):
         entries = connectors.catalog()["projects"]
         self.assertTrue(all({"repository", "license", "use", "liveOrders", "harnessMode"} <= set(entry) for entry in entries))
         self.assertTrue(all(entry["harnessMode"] in ("research", "backtest", "paper", "data", "reference") for entry in entries))
+
+
+class DeskJournalTests(unittest.TestCase):
+    def setUp(self):
+        self.journal = {"theses": [], "decisions": [], "events": []}
+
+    def test_report_catalog_points_to_skills(self):
+        entries = desk.reports()["reports"]
+        self.assertGreaterEqual(len(entries), 12)
+        self.assertEqual(len({entry["id"] for entry in entries}), len(entries))
+        self.assertTrue(all({"name", "when", "skill", "cadence", "desks", "length"} <= set(entry) for entry in entries))
+
+    def test_thesis_needs_falsifiable_conditions_and_one_open_entry(self):
+        with self.assertRaises(HarnessError):
+            desk.thesis_add(self.journal, "NVDA", "US", "성장 지속", ["매출 증가"], [])
+        entry = desk.thesis_add(self.journal, "nvda", "US", "성장  지속", ["매출 증가"], ["고객 투자 축소"], 180, 120,
+                                "2026-11-21")
+        self.assertEqual((entry["symbol"], entry["statement"], entry["status"]), ("NVDA", "성장 지속", "open"))
+        with self.assertRaises(HarnessError):
+            desk.thesis_add(self.journal, "NVDA", "US", "다시", ["근거"], ["조건"])
+        desk.thesis_update(self.journal, "NVDA", "실적 상회", "strengthens", 4, "2026-11-22")
+        self.assertEqual(self.journal["theses"][0]["updates"][0]["conviction"], 4)
+        with self.assertRaises(HarnessError):
+            desk.thesis_update(self.journal, "NVDA", "메모", "better", 4)
+        desk.thesis_close(self.journal, "NVDA", "조건 도달", "2026-12-01")
+        with self.assertRaises(HarnessError):
+            desk.thesis_update(self.journal, "NVDA", "메모", "neutral", 3)
+        desk.thesis_add(self.journal, "NVDA", "US", "새 논지", ["근거"], ["조건"])
+
+    def test_scorecard_measures_alpha_against_the_benchmark(self):
+        desk.decision_log(self.journal, "NVDA", "US", "buy", 100, "SPX", 5000, "2026-01-02")
+        desk.decision_log(self.journal, "005930", "KR", "sell", 80000, "KOSPI", 3000, "2026-01-02")
+        desk.decision_log(self.journal, "AAPL", "US", "hold", 200, "SPX", 5000, "2026-01-02")
+        first = desk.decision_score(self.journal, 1, 120, 5500, "2026-02-02")
+        self.assertEqual((first["settled"]["returnPct"], first["settled"]["alphaPct"], first["settled"]["hit"]),
+                         (20.0, 10.0, True))
+        second = desk.decision_score(self.journal, 2, 88000, 3150, "2026-02-02")
+        self.assertEqual((second["settled"]["alphaPct"], second["settled"]["hit"]), (5.0, False))
+        self.assertIsNone(desk.decision_score(self.journal, 3, 210, 5500, "2026-02-02")["settled"]["hit"])
+        card = desk.scorecard(self.journal)
+        self.assertEqual((card["settled"], card["hitRatePct"], card["open"]), (3, 50.0, []))
+        self.assertEqual(card["byRating"]["buy"]["meanAlphaPct"], 10.0)
+        self.assertIn("20건", card["note"])
+        with self.assertRaises(HarnessError):
+            desk.decision_score(self.journal, 9, 1, 1)
+        with self.assertRaises(HarnessError):
+            desk.decision_score(self.journal, 1, 120, 5500, "2025-12-31")
+        with self.assertRaises(HarnessError):
+            desk.decision_log(self.journal, "NVDA", "US", "buy", -1, "SPX", 5000)
+
+    def test_events_are_sorted_and_windowed(self):
+        desk.event_add(self.journal, "2026-12-10", "FOMC", "macro", "H")
+        desk.event_add(self.journal, "2026-11-25", "실적 발표", "earnings", "H", "nvda")
+        desk.event_add(self.journal, "2027-03-01", "주주총회", "corporate", "L", "005930")
+        window = desk.event_list(self.journal, 30, "2026-11-21")
+        self.assertEqual([event["title"] for event in window["events"]], ["실적 발표", "FOMC"])
+        self.assertEqual(window["events"][0]["symbol"], "NVDA")
+        with self.assertRaises(HarnessError):
+            desk.event_add(self.journal, "12/10", "잘못된 날짜")
+
+    def test_journal_round_trip_is_private_and_rejects_bad_files(self):
+        with tempfile.TemporaryDirectory() as work:
+            path = Path(work) / "desk" / "journal.json"
+            self.assertEqual(desk.load(path), self.journal)
+            desk.event_add(self.journal, "2026-12-10", "FOMC")
+            desk.save(self.journal, path)
+            self.assertEqual(desk.load(path), self.journal)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            path.write_text("[]", encoding="utf-8")
+            with self.assertRaises(HarnessError):
+                desk.load(path)
 
 
 if __name__ == "__main__":

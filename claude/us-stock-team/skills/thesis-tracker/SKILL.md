@@ -1,0 +1,58 @@
+---
+name: thesis-tracker
+description: 투자 논지를 근거와 깨지는 조건으로 적어 두고, 새 실적이나 뉴스가 나올 때마다 아직 유효한지 점검한다. "내 투자 아이디어 기록해 줘", "이 종목 계속 들고 가도 돼", "논지 점검", "투자 일지", "지난번 판단 맞았어"에 사용한다.
+---
+
+# 투자 논지 점검
+
+논지는 틀렸음을 확인할 수 있게 써야 한다. "좋은 회사라서"는 논지가 아니다.
+
+## 처음 기록할 때
+
+1. 논지를 한 문장으로 쓴다: 무엇이, 왜, 언제까지 달라질 것인가.
+2. 논지를 받치는 근거 3~5개와, 논지가 깨지는 조건 3~5개를 적는다. 조건은 숫자나 사건으로 쓴다.
+3. 목표 가격과 손절 기준을 해당 통화의 절대 가격으로 적는다.
+4. 기록한다.
+
+```sh
+python3 harness/desk.py thesis-add NVDA --market US --statement "데이터센터 매출 성장이 내년까지 이어진다" --pillar "분기 데이터센터 매출 증가" --risk "주요 고객 설비투자 축소 발표" --target 180 --stop 120
+```
+
+5. 의견을 냈으면 기준 가격과 비교 지수 수준을 함께 남긴다.
+
+```sh
+python3 harness/desk.py decision-log NVDA --market US --rating buy --price 150 --benchmark SPX --benchmark-level 6800
+```
+
+## 점검할 때
+
+1. `python3 harness/desk.py thesis-list NVDA`로 기록을 읽는다.
+2. 마지막 점검 뒤에 나온 실적, 공시, 뉴스를 해당 시장의 역할과 `news`에 확인받는다.
+3. 근거마다 강화, 약화, 변화 없음으로 표시한다. 깨지는 조건에 닿았는지 본다.
+4. `risk-review`에 논지를 가장 약하게 만드는 증거를 찾게 한다.
+5. 결과를 기록한다. 확신도는 1(약함)부터 5(강함)까지다.
+
+```sh
+python3 harness/desk.py thesis-update NVDA --note "3분기 데이터센터 매출이 가이던스를 넘음" --impact strengthens --conviction 4
+```
+
+6. 깨지는 조건에 닿았으면 그대로 알리고 `thesis-close`로 닫는다. 이유를 바꿔 가며 논지를 이어 가지 않는다.
+7. `performance` 역할에 `scorecard` 정산을 맡겨 지금까지의 의견이 지수 대비 어땠는지 본다.
+
+## 형식
+
+1. 기준 시각, 논지 한 문장, 현재 상태(유효, 약화, 깨짐)
+2. 근거 점검 표: 근거, 최근 사실, 강화·약화
+3. 깨지는 조건 점검 표
+4. 가격: 기록 당시, 현재, 목표, 손절
+5. 다음 점검일과 확인할 것
+
+기록은 내 PC의 `.local/desk/`에만 저장된다.
+
+## 발행 전 점검
+
+1. `editor` 역할에 초안을 보내 쉬운 말, 구조, 숫자와 출처의 일치를 점검받는다.
+2. `compliance` 역할에 표현, 고지, 개인정보, 출처를 점검받는다.
+3. 파일이 필요하면 `us-stock-research` 스킬의 렌더링 절차와 `editorial-design` 스킬로 한국어 HTML을 만든다.
+
+전문 역할을 쓸 수 없는 환경에서는 현재 세션이 같은 항목을 직접 확인하고 독립 검토를 거치지 않았다고 밝힌다. 리포트는 조사 자료이며 투자 조언이나 권유가 아니라고 적는다. Codex에서는 역할 이름이 `news_desk`, `market_sentiment`, `technical_analyst`, `sector_analyst`, `market_strategist`, `idea_screener`, `report_editor`, `compliance_officer`, `performance_analyst`다.

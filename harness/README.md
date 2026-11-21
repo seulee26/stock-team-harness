@@ -116,3 +116,22 @@ python3 harness/connectors.py catalog
 - `agent-store`는 AI3 에이전트 스토어 MCP 게이트웨이를 Claude Code나 Codex에 등록하는 방법을 보여 줍니다. 등록은 사용자가 직접 실행합니다.
 - `catalog`는 검토한 퀀트·선물 오픈소스의 라이선스와 주문 기능 여부를 보여 줍니다. 이 도구들의 코드는 패키지에 들어 있지 않습니다.
 - 받은 데이터는 로컬 리서치에 쓰고 재배포하지 않습니다. FRED 자료를 쓴 결과물에는 FRED API를 사용했으며 세인트루이스 연준이 보증한 것이 아니라고 밝힙니다.
+
+## 리포트 목록과 리서치 기록
+
+`desk.py`는 리포트 종류를 보여 주고, 투자 논지·의견·일정을 내 PC의 `.local/desk/journal.json`에 기록합니다. 네트워크를 쓰지 않습니다.
+
+```bash
+python3 harness/desk.py reports
+python3 harness/desk.py thesis-add NVDA --market US --statement "데이터센터 매출 성장이 이어진다" --pillar "분기 매출 증가" --risk "주요 고객 투자 축소"
+python3 harness/desk.py thesis-update NVDA --note "실적이 가이던스를 넘음" --impact strengthens --conviction 4
+python3 harness/desk.py decision-log NVDA --market US --rating buy --price 150 --benchmark SPX --benchmark-level 6800
+python3 harness/desk.py decision-score 1 --price 165 --benchmark-level 7000
+python3 harness/desk.py scorecard
+python3 harness/desk.py event-add 2026-12-10 "미국 FOMC 금리 결정" --kind macro --impact H
+python3 harness/desk.py event-list --days 30
+```
+
+- 논지는 근거와 깨지는 조건을 각각 1~5개 적어야 기록됩니다. 한 종목에 열린 논지는 하나입니다.
+- `decision-score`는 의견을 낸 뒤의 수익률에서 비교 지수 수익률을 뺀 초과수익으로 정산합니다. `scorecard`는 의견 등급별 평균 초과수익과 적중률을 보여 줍니다.
+- 가격과 지수 수준은 사용자가 확인한 값을 직접 넣습니다.

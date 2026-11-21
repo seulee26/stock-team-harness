@@ -1,15 +1,16 @@
-# 주식 리서치 하네스 · AI 헤지펀드 팀
+# 주식 리서치 하네스 · AI 리서치센터와 헤지펀드 팀
 
-AI에게 주식을 물어보면, 헤지펀드처럼 여러 팀이 나눠 조사하고 서로 검증한 뒤 **주식을 몰라도 읽을 수 있는 한국어 리포트**로 정리해 주는 도구입니다. Claude Code와 Codex에서 씁니다.
+AI에게 주식을 물어보면, 증권사 리서치센터와 헤지펀드처럼 여러 팀이 나눠 조사하고 서로 검증한 뒤 **주식을 몰라도 읽을 수 있는 한국어 리포트**로 정리해 주는 도구입니다. Claude Code와 Codex에서 씁니다.
 
 - "삼성전자 지금 사도 될까?", "엔비디아 분석해 줘"처럼 평소 말투로 물어보면 됩니다.
-- 미국 주식, 국내 주식, 선물·매크로, 퀀트 리서치 네 팀과 리스크 관리, 포트폴리오 매니저까지 AI 15명이 일합니다.
+- 전략, 뉴스, 미국 주식, 국내 주식, 산업, 선물·매크로, 퀀트, 리스크, 편집·준법까지 AI 24명이 일합니다.
+- 모닝 브리프, 마감 시황, 뉴스 브리핑, 기업·산업 리포트, 실적 프리뷰 등 리포트 15종을 받을 수 있습니다.
 - 결과는 쉬운 말로 쓴 리포트(HTML·PDF)로 받고, 모든 숫자에 출처가 붙습니다.
 - DART, 한국은행, FRED 같은 데이터와 토스증권 계좌는 원하는 사람만 본인 키로 연결합니다.
 
 소개 페이지와 실제 리포트 예시: https://axlabs-stock-harness.onpod.ai
 
-> 이 도구는 조사, 백테스트, 모의 포트폴리오까지만 합니다. 실제 주문은 하지 않으며 투자 권유가 아닙니다. 투자 판단과 책임은 본인에게 있습니다. 선물은 원금보다 큰 손실이 날 수 있습니다.
+> 에이전트 팀의 의견은 조사 자료이며 투자 조언이나 권유가 아닙니다. 투자 판단과 책임은 본인에게 있습니다. 하네스는 주문을 대신 넣지 않으며, 투자는 본인이 증권사에서 직접 합니다. 선물은 원금보다 큰 손실이 날 수 있습니다.
 
 ---
 
@@ -83,35 +84,42 @@ Codex 앱을 쓴다면 하네스 폴더를 프로젝트 폴더로 열면 됩니�
 
 ### 회사처럼 나눈 조직
 
-질문이 들어오면 현재 대화가 최고투자책임자(CIO) 역할을 맡아 필요한 팀에만 일을 나눠 줍니다.
+질문이 들어오면 현재 대화가 리서치센터장 겸 최고투자책임자(CIO) 역할을 맡아 필요한 팀에만 일을 나눠 줍니다.
 
 ```mermaid
 flowchart TD
-    Q(["질문"]) --> CIO["최고투자책임자 · CIO<br/>Claude Code 또는 Codex<br/>안건 · 기준 시각 · 담당 팀 정하기"]
+    Q(["질문"]) --> CIO["리서치센터장 · CIO<br/>Claude Code 또는 Codex<br/>리포트 종류 · 기준 시각 · 담당 팀 정하기"]
 
-    CIO --> US["미국 주식 팀<br/>시세 · 실적 · 애널리스트 의견<br/>가치평가 · 매매 시점"]
+    CIO --> ST["전략 · 뉴스<br/>시장 국면 · 뉴스 영향 · 심리"]
+    CIO --> US["미국 주식 팀<br/>시세 · 실적 · 의견<br/>가치평가 · 매매 시점"]
     CIO --> KR["국내 주식 팀<br/>KRX 시세 · DART 공시<br/>수급 · 증권사 의견"]
-    CIO --> FM["선물 · 매크로 팀<br/>금리 · 환율 · 물가<br/>선물 계약 · 레버리지"]
-    CIO --> QT["퀀트 리서치 팀<br/>규칙 기반 전략 백테스트"]
+    CIO --> SE["산업 · 아이디어<br/>가치사슬 · 후보 발굴"]
+    CIO --> FM["선물 · 매크로 팀<br/>금리 · 환율 · 선물 계약"]
+    CIO --> QT["퀀트 · 기술적 분석<br/>백테스트 · 가격 분석"]
 
-    US --> RV["리스크 관리<br/>반대 근거 찾기 · 숫자 재확인<br/>비중 · 레버리지 · 낙폭 한도"]
+    ST --> RV["리스크 · 성과<br/>반대 근거 · 한도 점검<br/>과거 의견 정산"]
+    US --> RV
     KR --> RV
+    SE --> RV
     FM --> RV
     QT --> RV
 
     RV --> PM["포트폴리오 매니저<br/>최종 의견 · 판단을 바꿀 조건"]
-    PM --> O(["투자위원회 메모 · 리포트<br/>HTML · PDF"])
-    CIO -. "팔 때 비용을 물으면" .-> OPS["운영 · 매도 비용 계산"]
+    PM --> ED["편집 · 준법<br/>쉬운 말 · 숫자 대조 · 고지 점검"]
+    ED --> O(["리포트 15종<br/>HTML · PDF"])
 ```
 
 | 조직 | 에이전트 | 맡은 일 |
 | --- | --- | --- |
+| 전략·뉴스 | `strategist`, `news`, `sentiment` | 시장 국면과 자산별 시각, 뉴스의 사실과 영향, 심리와 포지셔닝 |
 | 미국 주식 팀 | `market`, `fundamentals`, `analyst-opinions`, `valuation`, `trade-timing` | 미국 상장 주식·ETF의 시세, 실적, 증권사 의견, 적정 가격, 매매 조건 |
-| 국내 주식 팀 | `kr-market`, `kr-fundamentals`, `kr-flows` | 코스피·코스닥 시세, DART 공시와 지배구조, 외국인·기관 수급과 증권사 의견 |
+| 국내 주식 팀 | `kr-market`, `kr-fundamentals`, `kr-flows` | 코스피·코스닥 시세, DART 공시와 지배구조, 수급과 증권사 의견 |
+| 산업·아이디어 | `sector`, `idea-screener` | 산업 구조와 가치사슬, 조건에 맞는 후보 발굴 |
 | 선물·매크로 팀 | `macro`, `futures` | 금리·환율·물가와 중앙은행 일정, 선물 계약 명세·증거금·레버리지 |
-| 퀀트 리서치 팀 | `quant-research` | 이동평균·모멘텀·돌파 전략 백테스트와 과최적화 점검 |
-| 리스크 관리 | `risk-review`, `risk-officer` | 결론이 틀릴 수 있는 이유 찾기, 포트폴리오 한도와 규정 점검 |
+| 퀀트·기술적 분석 | `quant-research`, `technical` | 전략 백테스트와 과최적화 점검, 추세와 지지·저항 |
+| 리스크·성과 | `risk-review`, `risk-officer`, `performance` | 결론이 틀릴 수 있는 이유, 포트폴리오 한도, 과거 의견의 지수 대비 정산 |
 | 운용 | `portfolio-manager` | 팀 의견을 종합한 최종 의견 |
+| 편집·준법 | `editor`, `compliance` | 초보자가 읽을 수 있게 다듬기, 표현·고지·개인정보 점검 |
 | 운영 | `stock-sale-fee` | 팔 때 드는 수수료와 세금 |
 
 ### 하네스 구성
@@ -121,8 +129,9 @@ flowchart TD
 ```mermaid
 flowchart TD
     U(["사용자"]) --> AI["Claude Code · us-stock-team 플러그인<br/>또는 Codex · 하네스 폴더 열기"]
-    AI --> SK["스킬 16개"]
-    SK --> AG["전문 에이전트 15명"]
+    AI --> SK["스킬 27개"]
+    SK --> AG["전문 에이전트 24명"]
+    SK --> DK["harness/desk.py<br/>리포트 목록 · 논지 · 의견 정산 · 일정"]
     SK --> QN["harness/quant.py<br/>백테스트 · 수량 계산"]
     SK --> CN["harness/connectors.py<br/>본인 키로 여는 데이터 연결"]
     SK --> HI["harness/integrations.py<br/>오픈소스 도구 연동"]
@@ -137,6 +146,7 @@ flowchart TD
     DATA --> REP
     OSS --> REP
     QN --> REP
+    DK --> LOC(["내 PC 기록<br/>.local/desk/"])
     TOSS --> PC(["내 PC 화면<br/>계좌 정보는 여기까지만"])
 ```
 
@@ -148,7 +158,7 @@ flowchart TD
 
 ## Claude Code 플러그인으로 쓰기
 
-이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 16개와 전문 에이전트 15명이 추가됩니다.
+이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 27개와 전문 에이전트 24명이 추가됩니다.
 
 ### 불러오는 방법 두 가지
 
@@ -179,27 +189,76 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 평소 말투로 요청해도 알맞은 스킬이 골라집니다. 직접 고르려면 `/us-stock-team:스킬이름` 뒤에 요청을 적습니다. Codex에서는 `$스킬이름`으로 부릅니다.
 
 ```text
-/us-stock-team:hedge-fund-desk 엔비디아와 SK하이닉스 중 어디에 비중을 둘지 투자위원회를 열어 줘.
+/us-stock-team:morning-note 오늘 한국장 열리기 전에 볼 것 정리해 줘.
 ```
 
-| 스킬 | 이럴 때 씁니다 | 요청 예시 |
-| --- | --- | --- |
-| `stock-harness-start` | 처음 설치했거나 사용법이 궁금할 때 | "처음인데 뭐부터 하면 돼?" |
-| `hedge-fund-desk` | 여러 팀이 함께 심사한 결론이 필요할 때 | "투자위원회 열어서 검토해 줘." |
-| `us-stock-research` | 미국 종목 하나를 처음부터 끝까지 분석할 때 | "애플 지금 사도 될까?" |
-| `kr-stock-research` | 국내 종목을 분석할 때 | "삼성전자 최근 실적과 수급 알려 줘." |
-| `futures-macro-research` | 선물이나 금리·환율이 궁금할 때 | "코스피200 선물 한 계약이 얼마짜리야?" |
-| `quant-backtest` | 전략이 과거에 통했는지 확인할 때 | "골든크로스 전략 백테스트해 줘." |
-| `stock-data-connections` | 내 데이터 키를 연결할 때 | "DART 연결하는 법 알려 줘." |
-| `stock-earnings-review` | 실적 발표가 좋았는지 궁금할 때 | "테슬라 이번 분기 실적 어땠어?" |
-| `stock-bull-bear-review` | 오를 이유와 내릴 이유를 나란히 볼 때 | "팔란티어 낙관론과 비관론 비교해 줘." |
-| `stock-valuation-scenarios` | 적정 가격이 궁금할 때 | "엔비디아 적정 주가를 세 가지 경우로 계산해 줘." |
-| `stock-source-evidence` | 숫자의 출처와 날짜를 확인할 때 | "이 매출 숫자 어디서 나온 거야?" |
-| `stock-paper-portfolio` | 가짜 돈으로 연습 투자를 할 때 | "1만 달러로 모의 포트폴리오 짜 줘." |
-| `stock-toss-readonly` | 내 토스증권 계좌를 조회할 때 | "내 보유 종목 수익률 보여 줘." |
-| `stock-harness-integrations` | 오픈소스 도구 설치 상태를 확인할 때 | "연동 도구 설치됐는지 확인해 줘." |
-| `stock-harness-vibe-coding` | 하네스에 기능을 직접 추가할 때 | "시세에 데이터 지연 표시를 추가해 줘." |
-| `editorial-design` | 리포트를 읽기 편하게 다듬을 때 | "이 리포트 모바일에서 읽기 좋게 고쳐 줘." |
+---
+
+## 받을 수 있는 리포트 15종
+
+증권사 리서치센터가 내는 리포트 종류를 기준으로 나눴습니다. 무엇을 골라야 할지 모르겠으면 "어떤 리포트를 받을 수 있어?"라고 물어보세요.
+
+### 매일·매주 보는 것
+
+| 리포트 | 이럴 때 | 스킬 | 요청 예시 |
+| --- | --- | --- | --- |
+| 모닝 브리프 | 장 열리기 전에 볼 것 | `morning-note` | "오늘 장 전에 뭐 봐야 해?" |
+| 마감 시황 | 오늘 시장이 움직인 이유 | `market-wrap` | "오늘 코스피 왜 빠졌어?" |
+| 뉴스 브리핑 | 뉴스가 주가에 주는 영향 | `news-brief` | "이 뉴스가 반도체주에 무슨 의미야?" |
+| 주간 전략 | 이번 주 시장과 자산별 시각 | `weekly-strategy` | "이번 주 시장 어떻게 봐?" |
+| 일정 캘린더 | 앞으로 중요한 일정 | `catalyst-calendar` | "이번 달 중요한 일정 정리해 줘." |
+
+### 종목과 산업
+
+| 리포트 | 이럴 때 | 스킬 | 요청 예시 |
+| --- | --- | --- | --- |
+| 기업 분석 (미국) | 미국 종목을 처음부터 끝까지 | `us-stock-research` | "애플 지금 사도 될까?" |
+| 기업 분석 (국내) | 국내 종목을 처음부터 끝까지 | `kr-stock-research` | "삼성전자 실적과 수급 알려 줘." |
+| 실적 프리뷰 | 실적 발표 전에 볼 것 | `earnings-preview` | "엔비디아 실적 발표 전에 뭘 봐야 해?" |
+| 실적 리뷰 | 발표된 실적 평가 | `stock-earnings-review` | "테슬라 이번 분기 실적 어땠어?" |
+| 산업 리포트 | 산업 구조와 유리한 기업 | `sector-report` | "2차전지 산업 구조 정리해 줘." |
+| 아이디어 발굴 | 조건에 맞는 후보 찾기 | `idea-screen` | "배당 꾸준한 종목 후보 찾아 줘." |
+
+### 판단과 관리
+
+| 리포트 | 이럴 때 | 스킬 | 요청 예시 |
+| --- | --- | --- | --- |
+| 투자위원회 메모 | 여러 팀이 함께 심사 | `hedge-fund-desk` | "투자위원회 열어서 검토해 줘." |
+| 투자 논지 점검 | 내 생각이 아직 유효한지 | `thesis-tracker` | "이 종목 계속 들고 가도 돼?" |
+| 포트폴리오 점검 | 보유 종목 전체의 쏠림과 위험 | `portfolio-review` | "내 포트폴리오 점검해 줘." |
+| 선물·매크로 노트 | 선물, 금리, 환율 | `futures-macro-research` | "코스피200 선물 한 계약이 얼마짜리야?" |
+| 퀀트 노트 | 전략이 과거에 통했는지 | `quant-backtest` | "골든크로스 전략 백테스트해 줘." |
+
+모든 리포트는 내보내기 전에 편집 역할이 쉬운 말과 숫자를 점검하고, 준법 역할이 표현과 고지를 점검합니다.
+
+### 그 밖의 스킬
+
+| 스킬 | 이럴 때 씁니다 |
+| --- | --- |
+| `stock-harness-start` | 처음 설치했거나 사용법이 궁금할 때 |
+| `research-desk` | 어떤 리포트가 필요한지 고를 때 |
+| `stock-data-connections` | 내 데이터 키를 연결할 때 |
+| `stock-bull-bear-review` | 오를 이유와 내릴 이유를 나란히 볼 때 |
+| `stock-valuation-scenarios` | 적정 가격을 세 가지 경우로 계산할 때 |
+| `stock-source-evidence` | 숫자의 출처와 날짜를 확인할 때 |
+| `stock-paper-portfolio` | 가짜 돈으로 연습 투자를 할 때 |
+| `stock-toss-readonly` | 내 토스증권 계좌를 조회할 때 |
+| `stock-harness-integrations` | 오픈소스 도구 설치 상태를 확인할 때 |
+| `stock-harness-vibe-coding` | 하네스에 기능을 직접 추가할 때 |
+| `editorial-design` | 리포트를 읽기 편하게 다듬을 때 |
+
+### 생각을 기록하고 되짚기
+
+내가 왜 샀는지, 언제 틀렸다고 볼지 적어 두면 나중에 점검할 수 있습니다. 기록은 내 PC에만 저장됩니다.
+
+```sh
+python3 harness/desk.py reports
+python3 harness/desk.py thesis-add NVDA --market US --statement "데이터센터 매출 성장이 이어진다" --pillar "분기 매출 증가" --risk "주요 고객 투자 축소"
+python3 harness/desk.py decision-log NVDA --market US --rating buy --price 150 --benchmark SPX --benchmark-level 6800
+python3 harness/desk.py scorecard
+```
+
+`scorecard`는 낸 의견이 비교 지수보다 나았는지를 등급별로 보여 줍니다.
 
 ---
 
@@ -304,7 +363,7 @@ python3 service/launch.py --personal
 
 키를 묻는 화면이 나오면 붙여 넣습니다. 입력한 글자는 화면에 보이지 않습니다. 잠시 뒤 브라우저에 내 보유 종목과 매수 가능 금액이 나옵니다.
 
-- 조회만 합니다. 주문 기능이 없습니다.
+- 하네스는 조회만 합니다. 투자는 본인이 토스증권 앱에서 직접 합니다.
 - 키는 파일이나 브라우저에 저장하지 않습니다.
 - 화면은 내 PC 안(localhost)에서만 열립니다.
 - 공유용 리포트에는 계좌 정보가 들어가지 않습니다.
@@ -387,6 +446,7 @@ python3 service/launch.py
 | --- | --- |
 | `claude/us-stock-team/` | Claude Code 플러그인 (스킬, 에이전트) |
 | `.agents/skills/`, `.codex/agents/` | Codex용 스킬과 에이전트 |
+| `harness/desk.py` | 리포트 목록, 투자 논지·의견·일정 기록 |
 | `harness/quant.py` | 백테스트와 수량 계산 |
 | `harness/connectors.py` | 데이터 연결 (OpenDART, FRED, 에이전트 스토어 안내) |
 | `harness/integrations.py` | 오픈소스 도구 네 가지 연동 |
