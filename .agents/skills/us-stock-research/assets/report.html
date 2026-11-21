@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>$title · 미국주식 리서치</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182943;
+      --muted: #50617a;
+      --navy: #112541;
+      --blue: #1a547b;
+      --line: #d8e1ea;
+      --paper: #fff;
+      --surface: #f2f5f9;
+      --font: Inter, "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--surface); font: 17px/1.72 var(--font); }
+    a { color: var(--blue); text-underline-offset: .18em; }
+    a:focus-visible, .table-wrap:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+    h1, h2, h3, p, dl, dd { margin: 0; }
+    h1, h2, h3 { line-height: 1.3; text-wrap: balance; }
+    h1, h2, h3, p, dt, dd, th, td { word-break: keep-all; overflow-wrap: break-word; line-break: strict; }
+    p { text-wrap: pretty; }
+    p + p { margin-top: .7em; }
+    .measure { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .report { max-width: 850px; margin: 32px auto; background: var(--paper); }
+    .masthead, .report-body { padding-inline: clamp(18px, 5.5vw, 46px); }
+    .masthead { padding-block: 28px 24px; color: #fff; background: var(--navy); border-top: 5px solid #79b8ba; }
+    .report-type, .as-of { color: #e0eaf4; font-size: .86em; }
+    .masthead h1 { margin: 5px 0 8px; font-size: clamp(1.9rem, 5vw, 2.65rem); letter-spacing: -.035em; }
+    .as-of { margin: 0; }
+    .report-body { padding-block: 26px 38px; }
+
+    .thesis { padding-inline-start: 16px; border-inline-start: 4px solid #2c7376; }
+    .thesis h2 { margin-bottom: 10px; font-size: clamp(1.48rem, 4.2vw, 2rem); letter-spacing: -.035em; }
+    .thesis p, .section p, .timing-note p { max-width: 40rem; }
+
+    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 26px 0 30px; border: 1px solid var(--line); background: var(--line); }
+    .metric { min-width: 0; padding: 12px 13px; background: #f5f8fa; }
+    .metric dt, .metric-note { color: var(--muted); font-size: .88em; line-height: 1.5; }
+    .metric dt { font-weight: 650; }
+    .metric-value { margin: 3px 0 5px; font-size: clamp(1.25rem, 3.2vw, 1.67rem); font-weight: 750; line-height: 1.25; letter-spacing: -.03em; }
+
+    .timing { margin-block: 26px 31px; }
+    .timing h2, .section h2, .panel h2, .team h2, .sources h2 { margin-bottom: 12px; font-size: 1.24em; letter-spacing: -.025em; }
+    .timing ul { padding: 0; margin: 0; list-style: none; border-top: 1px solid var(--line); }
+    .timing li { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--line); }
+    .timing li:first-child { background: #eef6f5; }
+    .timing h3, .timing-trigger { font-size: 1em; line-height: 1.47; font-weight: 730; }
+    .timing h3 { color: #194d50; }
+    .timing li p + p { margin-top: 5px; }
+    .timing-note { margin-top: 11px; font-size: .9em; color: var(--muted); }
+    .timing-note p + p { margin-top: .3em; }
+
+    .columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 22px; margin-top: 27px; align-items: start; }
+    .columns.single { grid-template-columns: minmax(0, 1fr); }
+    .analysis { min-width: 0; }
+    .section, .team, .sources { border-top: 1px solid var(--line); }
+    .section { padding: 21px 0; }
+    .section:last-child { padding-bottom: 0; }
+    .panel { padding: 14px; background: #f5f8fa; border-top: 2px solid #2c7376; }
+    .panel + .panel { margin-top: 16px; }
+    .panel ul { margin: 0; padding: 0; list-style: none; }
+    .panel li + li, .panel dl > div + div { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+    .panel h3, .panel dt { font-weight: 700; }
+    .panel p, .panel dd { margin-top: 3px; font-size: .91em; }
+
+    .table-wrap { max-width: 100%; overflow-x: auto; margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: .93em; }
+    caption { padding: 0 0 7px; text-align: left; font-weight: 650; }
+    th, td { padding: 9px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    thead th { background: #edf3f7; }
+    tbody th { font-weight: 650; }
+
+    .refs { display: inline; margin-inline-start: .3em; font-size: .74em; white-space: nowrap; vertical-align: super; line-height: 0; }
+    .refs a + a { margin-inline-start: .25em; }
+    .refs a { font-weight: 650; text-decoration: none; }
+    .refs a:hover { text-decoration: underline; }
+    .evidence { margin-top: 6px; font-size: .84em; color: var(--muted); }
+    .team, .sources { margin-top: 24px; padding-top: 15px; }
+    .sources ol { margin: 0; padding-inline-start: 1.5em; font-size: .88em; }
+    .sources li { padding-inline-start: .1em; overflow-wrap: anywhere; }
+    .sources li + li { margin-top: .2em; }
+    .sources li:target { background: #eef3f8; }
+    .team dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 16px; }
+    .team dl > div { font-size: .91em; }
+    .team dt { font-weight: 700; }
+    .team dd { color: var(--muted); }
+
+    @media screen and (max-width: 850px) {
+      .report { margin: 0; }
+    }
+
+    @media screen and (max-width: 680px) {
+      .columns, .team dl { grid-template-columns: minmax(0, 1fr); }
+      .timing li { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 13px 12px; }
+    }
+
+    @media screen and (max-width: 530px) {
+      .metrics { grid-template-columns: minmax(0, 1fr); }
+      .metric { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 10px; }
+      .metric-value { margin: 0; }
+      .metric-note { grid-column: 1 / -1; margin-top: 4px; }
+      th, td { padding-inline: 7px; }
+      .table-wrap { font-size: .94em; }
+      td .measure { white-space: normal; }
+    }
+
+    @media print {
+      @page {
+        size: A4;
+        margin: 15mm 17mm 17mm;
+        @bottom-right { content: counter(page) " / " counter(pages); color: #50617a; font: 9pt system-ui; }
+      }
+      body { font-size: 11.75pt; line-height: 1.53; background: #fff; print-color-adjust: exact; }
+      .report { max-width: none; margin: 0; }
+      .masthead, .report-body { padding-inline: 0; }
+      .masthead { padding-block: 0 9pt; color: var(--navy); background: #fff; border-top: 0; border-bottom: 2pt solid var(--navy); }
+      .report-type, .as-of { color: var(--muted); }
+      .masthead h1 { font-size: 22pt; margin: 3pt 0; }
+      .report-body { padding-block: 13pt 0; }
+      .thesis { padding-inline-start: 9pt; border-inline-start-width: 2pt; }
+      .thesis h2 { font-size: 17pt; margin-bottom: 5pt; }
+      .metrics { margin: 11pt 0 13pt; break-inside: avoid; }
+      .metric { padding: 6pt 8pt; }
+      .metric-value { font-size: 14pt; }
+      .timing { margin-block: 11pt 0; }
+      .timing h2, .section h2, .panel h2, .team h2, .sources h2 { margin-bottom: 5pt; }
+      .timing li { grid-template-columns: minmax(0, 8.3rem) minmax(0, 1fr); padding: 7pt 7pt; gap: 7pt; }
+      .timing-note { margin-top: 7pt; }
+      .columns { display: block; margin-top: 12pt; }
+      .has-timing .columns { break-before: page; margin-top: 0; }
+      aside { margin-top: 10pt; }
+      .section { padding: 7pt 0 8pt; }
+      .section p + p { margin-top: .48em; }
+      .table-wrap { overflow: visible; margin-top: 7pt; }
+      th, td { padding: 4pt 6pt; }
+      h2, h3, caption { break-after: avoid; }
+      p { orphans: 2; widows: 2; }
+      .timing li, .panel, tr, .team dl > div, .sources li { break-inside: avoid; }
+      .team, .sources { margin-top: 9pt; padding-top: 6pt; }
+      .team dl { gap: 3pt 11pt; }
+      .team dl > div { display: flex; flex-wrap: wrap; column-gap: 5pt; }
+      .sources ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2pt 16pt; }
+      .sources li + li { margin-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="report$report_class" aria-labelledby="report-title">
+    <header class="masthead">
+      <p class="report-type">$kind</p>
+      <h1 id="report-title">$title</h1>
+      <p class="as-of">$as_of</p>
+    </header>
+    <div class="report-body">
+      <section class="thesis" aria-labelledby="thesis-title">
+        <h2 id="thesis-title">$headline</h2>
+        $summary
+      </section>
+      $metrics
+      $timing
+      <div class="columns$column_class">
+        <div class="analysis">
+          $sections
+        </div>
+        $aside
+      </div>
+      $team
+      $sources
+    </div>
+  </main>
+</body>
+</html>

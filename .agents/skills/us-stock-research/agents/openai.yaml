@@ -1,0 +1,4 @@
+interface:
+  display_name: "미국주식 리서치 팀"
+  short_description: "미국 상장사의 실적과 주가를 분석해 읽기 쉬운 HTML 리포트 작성"
+  default_prompt: "$us-stock-research NVDA를 최신 공시와 주가 기준으로 분석해서 HTML 리포트로 만들어줘."

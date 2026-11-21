@@ -1,0 +1,6 @@
+.env
+.env.*
+.local/
+**/token-*.json
+**/__pycache__/
+references/upstream/

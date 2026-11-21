@@ -1,0 +1,30 @@
+[
+  {
+    "date": "2026-10-05",
+    "previousSessionDate": "2026-10-02",
+    "close": "100",
+    "low": "93",
+    "complete": true
+  },
+  {
+    "date": "2026-10-06",
+    "previousSessionDate": "2026-10-05",
+    "close": "100.5",
+    "low": "94",
+    "complete": true
+  },
+  {
+    "date": "2026-10-07",
+    "previousSessionDate": "2026-10-06",
+    "close": "99",
+    "low": "94",
+    "complete": true
+  },
+  {
+    "date": "2026-10-08",
+    "previousSessionDate": "2026-10-07",
+    "close": "100",
+    "low": "93",
+    "complete": true
+  }
+]

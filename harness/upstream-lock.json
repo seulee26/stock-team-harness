@@ -1,0 +1,38 @@
+{
+  "tradingagents": {
+    "repository": "TauricResearch/TradingAgents",
+    "commit": "9fa1196fffbcfd9de5146d2dd2869df84ab99838",
+    "source": "https://codeload.github.com/TauricResearch/TradingAgents/tar.gz/9fa1196fffbcfd9de5146d2dd2869df84ab99838",
+    "license": "Apache-2.0",
+    "filename": "TauricResearch--TradingAgents-9fa1196fff.tar.gz",
+    "bytes": 3585874,
+    "sha256": "a3d15b80151b77a85b08377e6980f9b57aae840188c8d329806cb381a1edbeb8"
+  },
+  "openbb": {
+    "repository": "openbq-org/OpenBB",
+    "commit": "f0f1852b96dd3fc4d5868f8863cbe053ff49c6cd",
+    "source": "https://codeload.github.com/openbq-org/OpenBB/tar.gz/f0f1852b96dd3fc4d5868f8863cbe053ff49c6cd",
+    "license": "Apache-2.0",
+    "filename": "openbq-org--OpenBB-f0f1852b96.tar.gz",
+    "bytes": 83214088,
+    "sha256": "16cba75aa7044970d8ffba381c011e69f58e1366cc20237b6beb9204891b94cd"
+  },
+  "ai-hedge-fund": {
+    "repository": "virattt/ai-hedge-fund",
+    "commit": "5c553b5222044f6a5527bd377b4104c50ee0ad28",
+    "source": "https://codeload.github.com/virattt/ai-hedge-fund/tar.gz/5c553b5222044f6a5527bd377b4104c50ee0ad28",
+    "license": "MIT",
+    "filename": "virattt--ai-hedge-fund-5c553b5222.tar.gz",
+    "bytes": 456169,
+    "sha256": "d8cff5dc0523fe950faa1337c8112369b4320938a0df12ff1fe34a527365a1ff"
+  },
+  "financial-services": {
+    "repository": "anthropics/financial-services",
+    "commit": "3e32c2287dcb637c184c01cc0ad82d6af7e9bb0f",
+    "source": "https://codeload.github.com/anthropics/financial-services/tar.gz/3e32c2287dcb637c184c01cc0ad82d6af7e9bb0f",
+    "license": "Apache-2.0",
+    "filename": "anthropics--financial-services-3e32c2287d.tar.gz",
+    "bytes": 653853,
+    "sha256": "37f5f619f6700022009556ffa17c5f18079e888ad4e5a686aa574070648ccb15"
+  }
+}
