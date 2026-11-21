@@ -1,5 +1,6 @@
 # 주식 리서치 팀
 
+- 처음 쓰는 사용자가 시작 방법이나 사용법을 물으면 `$stock-harness-start`로 안내한다.
 - 미국 상장 주식·ETF의 분석이나 비교 요청에는 `$us-stock-research`를 적용한다. 기준 시각과 정규장 세션을 명시한다.
 - 네 가지 연동 도구를 쓰거나 상태를 점검하려면 `$stock-harness-integrations`를 적용한다. 작업에 따라 `$stock-source-evidence`, `$stock-bull-bear-review`, `$stock-earnings-review`, `$stock-valuation-scenarios`, `$stock-paper-portfolio`, `$stock-toss-readonly`를 선택한다.
 - 자연어로 기능을 변경하거나 스킬을 추가하는 요청에는 `$stock-harness-vibe-coding`을 적용한다. 변경한 경로의 공개 예제나 합성 데이터로 동작을 확인한다.

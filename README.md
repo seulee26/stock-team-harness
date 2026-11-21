@@ -65,6 +65,12 @@ Codex 앱을 쓴다면 하네스 폴더를 프로젝트 폴더로 열면 됩니�
 엔비디아(NVDA) 지금 사도 될까? 초보자도 이해할 수 있게 분석해 줘.
 ```
 
+무엇부터 해야 할지 모르겠다면 이렇게 물어보세요. 시작 가이드가 지금 상태를 확인하고 한 단계씩 안내합니다.
+
+```text
+처음인데 뭐부터 하면 돼?
+```
+
 몇 분 뒤 리포트 파일이 만들어집니다. 리포트에는 이런 내용이 담깁니다.
 
 - 한 줄 결론과 그 이유
@@ -75,9 +81,70 @@ Codex 앱을 쓴다면 하네스 폴더를 프로젝트 폴더로 열면 됩니�
 
 ---
 
+## 한눈에 보는 구조
+
+### 에이전트 팀이 일하는 순서
+
+질문을 받으면 팀장(Claude Code 또는 Codex)이 전문가 7명에게 일을 나눠 줍니다. 같은 줄에 있는 역할은 동시에 조사합니다.
+
+```mermaid
+flowchart TD
+    Q(["질문<br/>엔비디아 지금 사도 될까?"]) --> L["팀장 · Claude Code 또는 Codex<br/>종목 · 목적 · 기준일 정하기"]
+
+    L --> M["시세<br/>주가 · 거래 시간 · 일정"]
+    L --> F["실적<br/>매출 · 이익 · 현금흐름"]
+    L --> A["애널리스트 의견<br/>투자의견 · 목표가"]
+
+    M --> D{{"1단계 완료<br/>출처가 확인된 숫자"}}
+    F --> D
+    A --> D
+
+    D --> V["가치평가<br/>비싼지 싼지"]
+    D --> T["매매 시점<br/>살 조건 · 기다릴 조건"]
+
+    V --> R["리스크 검토<br/>반대 근거 찾기 · 숫자 다시 확인"]
+    T --> R
+
+    R --> W["팀장이 리포트 작성<br/>쉬운 한국어 · 출처 연결"]
+    W --> O(["리포트<br/>HTML · PDF"])
+
+    L -. "팔 때 비용을 물으면" .-> FEE["매도 비용<br/>수수료 · 세금 계산"]
+    FEE -.-> W
+```
+
+### 하네스 구성
+
+스킬과 에이전트는 AI가 읽는 지침이고, `harness/`와 `service/`는 내 PC에서 실행되는 프로그램입니다.
+
+```mermaid
+flowchart TD
+    U(["사용자"]) --> AI["Claude Code · us-stock-team 플러그인<br/>또는 Codex · 하네스 폴더 열기"]
+    AI --> SK["스킬 11개<br/>시작 가이드 · 종목 분석 · 실적 · 가치평가<br/>상승·하락 검토 · 모의투자 · 리포트 편집 등"]
+
+    SK --> AG["전문 에이전트 7명<br/>시세 · 실적 · 가치평가 · 애널리스트 의견<br/>매매 시점 · 리스크 검토 · 매도 비용"]
+    SK --> HI["harness/integrations.py<br/>오픈소스 도구 연동 · 선택"]
+    SK --> HT["harness/stock_harness.py · service/<br/>토스증권 조회 · 대시보드 · 선택"]
+
+    AG --> PUB[("공개 자료<br/>시세 · 공시 · 실적 발표")]
+    HI --> OSS["OpenBB · TradingAgents<br/>AI Hedge Fund<br/>Anthropic Financial Services"]
+    HT --> TOSS[("토스증권 Open API<br/>조회 전용 · 주문 없음")]
+
+    PUB --> REP(["공유 리포트<br/>공개 자료만 사용"])
+    OSS --> REP
+    TOSS --> PC(["내 PC 화면<br/>계좌 정보는 여기까지만"])
+```
+
+읽는 법
+
+- 화살표는 일을 시키거나 자료가 흘러가는 방향입니다.
+- **공유 리포트**에는 공개 시세와 공시만 들어갑니다. 토스증권 계좌 정보는 내 PC 화면에서만 보이고 리포트나 리서치 에이전트로 넘어가지 않습니다.
+- 토스증권과 오픈소스 도구는 선택 사항입니다. 연결하지 않아도 리서치 팀은 그대로 동작합니다.
+
+---
+
 ## Claude Code 플러그인으로 쓰기
 
-이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 플러그인을 불러오면 스킬 10개와 전문 에이전트 7명이 Claude Code에 추가됩니다.
+이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 플러그인을 불러오면 스킬 11개와 전문 에이전트 7명이 Claude Code에 추가됩니다.
 
 ### 불러오는 방법 두 가지
 
@@ -113,6 +180,7 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 
 | 스킬 | 이럴 때 씁니다 | 요청 예시 |
 | --- | --- | --- |
+| `stock-harness-start` | 처음 설치했거나 사용법이 궁금할 때 | "처음인데 뭐부터 하면 돼?" |
 | `us-stock-research` | 종목 하나를 처음부터 끝까지 분석할 때 | "애플 지금 사도 될까?" |
 | `stock-earnings-review` | 실적 발표가 좋았는지 궁금할 때 | "테슬라 이번 분기 실적 어땠어?" |
 | `stock-bull-bear-review` | 오를 이유와 내릴 이유를 나란히 보고 싶을 때 | "팔란티어 낙관론과 비관론 비교해 줘." |
@@ -259,6 +327,10 @@ python3 harness/stock_harness.py check-alert
 python3 -m unittest discover -s harness -p 'test_*.py'
 node --test service/server.test.mjs service/research-chat.test.mjs
 ```
+
+## 만든 곳
+
+[AX LABS](https://theaxlabs.com/)가 만들어 공개했습니다. AX LABS는 기업의 AI 전환을 돕는 컨설팅, AI 에이전트 구축, 임원·실무자 교육을 합니다. 문의: help@theaxlabs.com
 
 ## 라이선스
 
