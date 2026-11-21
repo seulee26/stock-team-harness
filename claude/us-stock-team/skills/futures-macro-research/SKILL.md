@@ -46,6 +46,7 @@ Codex에서는 `futures_desk`, `macro_rates`를 쓴다.
 | FRED 거시 시계열 | `python3 harness/connectors.py fred DGS10 --start 2026-01-01` | 본인 FRED 키 필요. 세인트루이스 연준이 보증한 결과가 아니라고 밝힌다 |
 | 에이전트 스토어 MCP (`bok-stats`, `us-market-data`, `capital-markets`) | 도구가 보이면 호출 | 유료 호출이 있을 수 있다 |
 | 거래소 지연 시세 | CME, KRX 공식 페이지를 직접 확인 | 10분 이상 지연. 긁어 모으거나 재배포하지 않는다 |
+| 연속 선물 일봉 (yfinance 설치 시) | `python3 harness/connectors.py bars ES=F --source yfinance --start 2025-01-01 --end 2026-11-20 --out es.csv` | 개인 연구용. 만기 교체가 이어 붙여진 가격이며 재배포하지 않는다 |
 | 사용자가 준 일봉 CSV | `python3 harness/quant.py backtest 파일.csv ...` | 연속 선물은 만기 교체 가격 조정 여부를 확인한다 |
 
 출처가 없는 실시간 가격을 만들지 않는다. 계약 승수, 증거금, 만기일도 기억으로 적지 않고 거래소 공식 명세에서 확인한 날짜와 함께 쓴다. 확인하지 못한 값은 [출처 없음]으로 두고, 계산 방식을 보여 줄 때는 [가정]이라고 표시한다.

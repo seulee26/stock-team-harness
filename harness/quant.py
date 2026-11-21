@@ -88,7 +88,17 @@ def summarize(curve, days, daily, held):
     mean = sum(daily) / len(daily)
     variance = sum((value - mean) ** 2 for value in daily) / max(len(daily) - 1, 1)
     deviation = math.sqrt(variance)
-    return {
+    downside = math.sqrt(sum(min(value, 0.0) ** 2 for value in daily) / len(daily))
+    worst = drawdown(curve)
+    cagr = (curve[-1] / curve[0]) ** (1 / years) - 1 if curve[-1] > 0 else None
+    active = [value for value in daily if value != 0]
+    extra = {
+        "sortino": round(mean / downside * math.sqrt(TRADING_DAYS), 2) if downside else None,
+        "calmar": round(cagr / abs(worst), 2) if cagr is not None and worst < 0 else None,
+        "winDaysPct": round(sum(1 for value in active if value > 0) / len(active) * 100, 1) if active else None,
+        "bestDayPct": round(max(daily) * 100, 2), "worstDayPct": round(min(daily) * 100, 2),
+    }
+    return extra | {
         "totalReturnPct": round(total * 100, 2),
         "cagrPct": round(((curve[-1] / curve[0]) ** (1 / years) - 1) * 100, 2) if curve[-1] > 0 else None,
         "maxDrawdownPct": round(drawdown(curve) * 100, 2),
@@ -209,6 +219,201 @@ def position_size(capital, risk_pct, entry, stop, multiplier=1.0, margin=None):
     }
 
 
+def sma(values, window):
+    return sum(values[-window:]) / window if len(values) >= window else None
+
+
+def ema_series(values, span):
+    alpha, result = 2 / (span + 1), [values[0]]
+    for value in values[1:]:
+        result.append(alpha * value + (1 - alpha) * result[-1])
+    return result
+
+
+def indicators(bars):
+    """Trend, momentum and volatility read-outs from closing prices."""
+    bars = validate_bars(list(bars))
+    closes = [close for _, close in bars]
+    last = closes[-1]
+    averages = {f"sma{window}": round(sma(closes, window), 4) if sma(closes, window) else None for window in (20, 60, 120)}
+    changes = [closes[index] - closes[index - 1] for index in range(1, len(closes))]
+    gains, losses = [max(value, 0) for value in changes], [max(-value, 0) for value in changes]
+    average_gain, average_loss = sum(gains[:14]) / 14, sum(losses[:14]) / 14
+    for gain, loss in zip(gains[14:], losses[14:]):
+        average_gain, average_loss = (average_gain * 13 + gain) / 14, (average_loss * 13 + loss) / 14
+    rsi = 100.0 if average_loss == 0 else 100 - 100 / (1 + average_gain / average_loss)
+    macd_line = [fast - slow for fast, slow in zip(ema_series(closes, 12), ema_series(closes, 26))]
+    signal = ema_series(macd_line, 9)
+    window = closes[-20:]
+    middle = sum(window) / len(window)
+    spread = math.sqrt(sum((value - middle) ** 2 for value in window) / len(window))
+    returns = [closes[index] / closes[index - 1] - 1 for index in range(1, len(closes))][-20:]
+    mean = sum(returns) / len(returns)
+    year = closes[-TRADING_DAYS:]
+    order = [averages[key] for key in ("sma20", "sma60", "sma120") if averages[key]]
+    trend = "판단 보류"
+    if len(order) == 3:
+        trend = "상승 정렬" if last > order[0] > order[1] > order[2] else (
+            "하락 정렬" if last < order[0] < order[1] < order[2] else "혼조")
+    return {
+        "dataScope": "user-supplied-bars", "asOf": bars[-1][0].isoformat(), "close": last, "trend": trend,
+        "movingAverages": averages, "rsi14": round(rsi, 1),
+        "macd": {"line": round(macd_line[-1], 4), "signal": round(signal[-1], 4),
+                 "histogram": round(macd_line[-1] - signal[-1], 4)},
+        "bollinger20": {"upper": round(middle + 2 * spread, 4), "middle": round(middle, 4),
+                        "lower": round(middle - 2 * spread, 4)},
+        "dailyVolatilityPct": round(math.sqrt(sum((value - mean) ** 2 for value in returns) / len(returns)) * 100, 2),
+        "range52w": {"high": max(year), "low": min(year),
+                     "positionPct": round((last - min(year)) / (max(year) - min(year)) * 100, 1) if max(year) > min(year) else None},
+        "note": "종가만으로 계산한 참고 지표입니다. 실적과 뉴스를 대신하지 않습니다.",
+    }
+
+
+def aligned_returns(series):
+    """Daily returns on the dates every series shares."""
+    if not 2 <= len(series) <= 30:
+        raise HarnessError("자산은 2~30개로 입력해 주세요.")
+    maps = {name: dict(validate_bars(list(bars))) for name, bars in series.items()}
+    shared = sorted(set.intersection(*(set(values) for values in maps.values())))
+    if len(shared) < 60:
+        raise HarnessError("자산들이 함께 거래된 날이 60일 이상 필요합니다.")
+    return shared, {name: [values[shared[index]] / values[shared[index - 1]] - 1 for index in range(1, len(shared))]
+                    for name, values in maps.items()}
+
+
+def deviation(values):
+    mean = sum(values) / len(values)
+    return math.sqrt(sum((value - mean) ** 2 for value in values) / max(len(values) - 1, 1))
+
+
+def project_to_simplex(values):
+    """Closest point with non-negative entries that sum to one."""
+    ordered = sorted(values, reverse=True)
+    running, threshold = 0.0, 0.0
+    for index, value in enumerate(ordered, 1):
+        running += value
+        candidate = (running - 1) / index
+        if value - candidate > 0:
+            threshold = candidate
+    return [max(value - threshold, 0.0) for value in values]
+
+
+def minimum_variance(covariance, start, steps=4000):
+    """Long-only weights that minimise portfolio variance (projected gradient descent)."""
+    size = len(covariance)
+    step = 1 / (2 * max(sum(abs(value) for value in row) for row in covariance))
+    current = list(start)
+    for _ in range(steps):
+        gradient = [2 * sum(covariance[row][column] * current[column] for column in range(size)) for row in range(size)]
+        current = project_to_simplex([current[index] - step * gradient[index] for index in range(size)])
+    return current
+
+
+def weights(series, method="inverse-vol"):
+    """Starting weights for a basket: equal, inverse-volatility or minimum-variance, plus correlations."""
+    if method not in ("equal", "inverse-vol", "min-variance"):
+        raise HarnessError("방식은 equal, inverse-vol, min-variance 중에서 골라 주세요.")
+    shared, returns = aligned_returns(series)
+    names = list(returns)
+    vols = {name: deviation(returns[name]) * math.sqrt(TRADING_DAYS) for name in names}
+    if any(value == 0 for value in vols.values()):
+        raise HarnessError("가격이 변하지 않은 자산이 있어 변동성을 계산할 수 없습니다.")
+    raw = {name: 1.0 if method == "equal" else 1 / vols[name] for name in names}
+    total = sum(raw.values())
+    result = {name: raw[name] / total for name in names}
+    means = {name: sum(returns[name]) / len(returns[name]) for name in names}
+    if method == "min-variance":
+        count = len(returns[names[0]])
+        covariance = [[sum((returns[first][index] - means[first]) * (returns[second][index] - means[second])
+                           for index in range(count)) / (count - 1) for second in names] for first in names]
+        result = dict(zip(names, minimum_variance(covariance, [result[name] for name in names])))
+
+    def correlation(first, second):
+        count = len(returns[first])
+        covariance = sum((returns[first][index] - means[first]) * (returns[second][index] - means[second])
+                         for index in range(count)) / (count - 1)
+        return covariance / (deviation(returns[first]) * deviation(returns[second]))
+
+    pairs = [{"pair": [first, second], "correlation": round(correlation(first, second), 2)}
+             for position, first in enumerate(names) for second in names[position + 1:]]
+    portfolio = [sum(result[name] * returns[name][index] for name in names) for index in range(len(shared) - 1)]
+    return {
+        "dataScope": "user-supplied-bars", "method": method,
+        "period": {"start": shared[0].isoformat(), "end": shared[-1].isoformat(), "days": len(shared)},
+        "weightsPct": {name: round(result[name] * 100, 1) for name in names},
+        "annualVolatilityPct": {name: round(vols[name] * 100, 1) for name in names},
+        "portfolioVolatilityPct": round(deviation(portfolio) * math.sqrt(TRADING_DAYS) * 100, 1),
+        "correlations": sorted(pairs, key=lambda item: -item["correlation"]),
+        "note": "과거 변동성으로 계산한 출발점입니다. 상관계수가 0.8을 넘는 자산은 하나의 위험으로 보세요.",
+    }
+
+
+def rank(series, lookback=120, skip=20):
+    """Cross-sectional momentum and volatility ranks for a list of assets."""
+    if not (20 <= lookback <= 400 and 0 <= skip < lookback):
+        raise HarnessError("lookback은 20~400, skip은 0 이상 lookback 미만으로 입력해 주세요.")
+    if not 2 <= len(series) <= 200:
+        raise HarnessError("자산은 2~200개로 입력해 주세요.")
+    rows = []
+    for name, bars in series.items():
+        closes = [close for _, close in validate_bars(list(bars))]
+        if len(closes) <= lookback:
+            raise HarnessError(f"{name}의 일봉이 lookback보다 짧습니다.")
+        returns = [closes[index] / closes[index - 1] - 1 for index in range(len(closes) - lookback, len(closes))]
+        rows.append({"asset": name, "momentumPct": round((closes[-1 - skip] / closes[-1 - lookback] - 1) * 100, 2),
+                     "annualVolatilityPct": round(deviation(returns) * math.sqrt(TRADING_DAYS) * 100, 1)})
+    for key, reverse in (("momentumPct", True), ("annualVolatilityPct", False)):
+        for position, row in enumerate(sorted(rows, key=lambda item: item[key], reverse=reverse), 1):
+            row[key.replace("Pct", "Rank")] = position
+    for row in rows:
+        row["score"] = row["momentumRank"] + row["annualVolatilityRank"]
+    return {"dataScope": "user-supplied-bars", "lookback": lookback, "skip": skip,
+            "ranking": sorted(rows, key=lambda item: (item["score"], item["asset"])),
+            "note": "모멘텀이 높고 변동성이 낮을수록 순위가 앞섭니다. 순위는 조사 대상을 고르는 용도이며 매수 근거가 아닙니다."}
+
+
+def apply_limits(target, max_position=25.0, max_gross=100.0, drawdown_pct=0.0, halve_at=10.0, stop_at=20.0):
+    """Shrink proposed weights to the limits. Risk control only reduces; the rest stays in cash."""
+    if not isinstance(target, dict) or not 1 <= len(target) <= 100:
+        raise HarnessError("비중은 1~100개 자산으로 입력해 주세요.")
+    numbers = (max_position, max_gross, drawdown_pct, halve_at, stop_at)
+    if not all(isinstance(value, (int, float)) and math.isfinite(value) for value in (*target.values(), *numbers)):
+        raise HarnessError("비중과 한도는 숫자로 입력해 주세요.")
+    if not (0 < max_position <= 100 and 0 < max_gross <= 1000 and 0 <= drawdown_pct <= 100 and 0 < halve_at < stop_at):
+        raise HarnessError("한도 값을 확인해 주세요.")
+    result, events = {name: float(value) for name, value in target.items()}, []
+    if drawdown_pct >= stop_at:
+        events.append({"rule": "drawdown-stop", "detail": f"낙폭 {drawdown_pct}%가 {stop_at}% 이상이라 전량 현금"})
+        result = {name: 0.0 for name in result}
+    else:
+        for name, value in result.items():
+            if abs(value) > max_position:
+                events.append({"rule": "max-position", "asset": name, "from": value, "to": math.copysign(max_position, value)})
+                result[name] = math.copysign(max_position, value)
+        if drawdown_pct >= halve_at:
+            events.append({"rule": "drawdown-halve", "detail": f"낙폭 {drawdown_pct}%가 {halve_at}% 이상이라 절반으로 축소"})
+            result = {name: value / 2 for name, value in result.items()}
+        gross = sum(abs(value) for value in result.values())
+        if gross > max_gross:
+            events.append({"rule": "max-gross", "from": round(gross, 2), "to": max_gross})
+            result = {name: value * max_gross / gross for name, value in result.items()}
+    gross = sum(abs(value) for value in result.values())
+    return {"dataScope": "calculation-only", "weightsPct": {name: round(value, 2) for name, value in result.items()},
+            "grossPct": round(gross, 2), "netPct": round(sum(result.values()), 2),
+            "cashPct": round(max(100 - gross, 0), 2), "events": events,
+            "note": "한도는 비중을 줄이기만 합니다. 줄인 만큼은 현금으로 둡니다."}
+
+
+def read_series(paths):
+    series = {}
+    for path in paths:
+        name = Path(path).stem
+        if name in series:
+            raise HarnessError("파일 이름이 겹칩니다. 자산마다 다른 이름의 CSV를 써 주세요.")
+        series[name] = read_bars(path)
+    return series
+
+
 def demo_bars(count=750):
     """Deterministic synthetic prices so the demo needs no market data."""
     state = 20261121
@@ -254,6 +459,19 @@ def main():
     size.add_argument("--stop", type=float, required=True)
     size.add_argument("--multiplier", type=float, default=1.0)
     size.add_argument("--margin", type=float, help="계약당 증거금. 주면 증거금으로 살 수 있는 수량으로 제한합니다")
+    commands.add_parser("indicators", help="추세·모멘텀·변동성 지표").add_argument("csv")
+    basket = commands.add_parser("weights", help="여러 자산의 출발 비중과 상관계수")
+    basket.add_argument("csv", nargs="+")
+    basket.add_argument("--method", default="inverse-vol", help="equal, inverse-vol, min-variance")
+    ranking = commands.add_parser("rank", help="여러 자산의 모멘텀·변동성 순위")
+    ranking.add_argument("csv", nargs="+")
+    ranking.add_argument("--lookback", type=int, default=120)
+    ranking.add_argument("--skip", type=int, default=20)
+    limit = commands.add_parser("limits", help="제안 비중을 한도에 맞게 줄입니다")
+    limit.add_argument("weights", help='비중 JSON. 예: \'{"NVDA": 40, "005930": 30}\'')
+    limit.add_argument("--max-position", type=float, default=25.0)
+    limit.add_argument("--max-gross", type=float, default=100.0)
+    limit.add_argument("--drawdown", type=float, default=0.0, help="최근 고점 대비 낙폭(%)")
     args = parser.parse_args()
 
     def options():
@@ -262,7 +480,15 @@ def main():
                 "multiplier": args.multiplier, "contracts": args.contracts, "fee": args.fee, "margin": args.margin}
 
     try:
-        if args.command == "size":
+        if args.command == "indicators":
+            result = indicators(read_bars(args.csv))
+        elif args.command == "weights":
+            result = weights(read_series(args.csv), args.method)
+        elif args.command == "rank":
+            result = rank(read_series(args.csv), args.lookback, args.skip)
+        elif args.command == "limits":
+            result = apply_limits(json.loads(args.weights), args.max_position, args.max_gross, args.drawdown)
+        elif args.command == "size":
             result = position_size(args.capital, args.risk_pct, args.entry, args.stop, args.multiplier, args.margin)
         elif args.command == "demo":
             result = backtest(demo_bars(), args.strategy, **options()) | {"dataScope": "synthetic-only"}

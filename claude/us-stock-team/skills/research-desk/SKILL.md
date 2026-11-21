@@ -26,6 +26,8 @@ description: 증권사 리서치센터처럼 어떤 리포트가 필요한지 �
 | 이 전략 통했어? | 퀀트 노트 | `quant-backtest` | 2~3장 |
 | 여러 팀이 같이 심사해 줘 | 투자위원회 메모 | `hedge-fund-desk` | 3~5장 |
 | 내 계좌 전체를 봐 줘 | 포트폴리오 점검 | `portfolio-review` | 2~4장 |
+| 이 ETF 어때? | ETF 리서치 | `etf-research` | 한 장~3장 |
+| 세금이 얼마야? | 세무 안내 (리포트가 아닌 계산과 설명) | `kr-tax-desk` | 채팅 답변 |
 
 ## 고르는 법
 
@@ -56,6 +58,9 @@ description: 증권사 리서치센터처럼 어떤 리포트가 필요한지 �
 | 선물 | `futures` |
 | 리스크·성과 | `risk-review`, `risk-officer`, `performance` |
 | 운용 | `portfolio-manager` |
+| ETF | `etf-analyst` |
+| 세무 | `tax-securities`, `tax-gift`, `tax-accounts`, `tax-reviewer` |
+| 오픈소스 심사 | `oss-evaluator` |
 | 문서·위키 | `wiki-librarian`, `wiki-auditor` |
 | 편집·준법 | `editor`, `compliance` |
 | 운영 | `stock-sale-fee` |

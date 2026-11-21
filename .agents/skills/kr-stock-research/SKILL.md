@@ -49,7 +49,8 @@ Codex에서는 `kr_stock_fundamentals`, `kr_stock_market`, `kr_stock_flows`, `us
 | 1 | 에이전트 스토어 MCP (`dart`, `corporate-data`, `corp-financials`, `kr-equity-report`, `capital-markets`, `bok-stats`) | 도구가 보이면 그대로 호출 |
 | 2 | OpenDART 본인 키 | `python3 harness/connectors.py dart-filings 005930`, `dart-financials 005930 --year 2025` |
 | 3 | 토스증권 공개 시세 | `python3 harness/stock_harness.py market-packet 005930` |
-| 4 | 공개 웹 | dart.fss.or.kr, kind.krx.co.kr, 회사 IR 자료 |
+| 4 | 일봉 (FinanceDataReader 설치 시) | `python3 harness/connectors.py bars 005930 --source fdr --start 2025-01-01 --end 2026-11-20 --out 005930.csv` |
+| 5 | 공개 웹 | dart.fss.or.kr, kind.krx.co.kr, 회사 IR 자료 |
 
 연결 방법은 `stock-data-connections` 스킬에 있다. 키는 사용자가 자기 터미널 환경 변수에만 넣는다.
 
@@ -60,7 +61,7 @@ Codex에서는 `kr_stock_fundamentals`, `kr_stock_market`, `kr_stock_flows`, `us
 - 유상증자, 전환사채, 물적분할처럼 주식 수가 늘어나는 사건.
 - 외국인·기관 수급, 공매도 잔고, 신용잔고.
 - 우선주와 보통주의 가격 차이.
-- 매도할 때 드는 증권거래세와 수수료는 `stock-sale-fee` 역할에 맡긴다.
+- 매도할 때 드는 증권거래세와 수수료는 `stock-sale-fee` 역할에 맡긴다. 양도소득세나 배당 세금을 물으면 `stock-tax-kr` 스킬로 넘긴다.
 
 ## 결과 작성
 

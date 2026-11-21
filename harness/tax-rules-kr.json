@@ -1,0 +1,372 @@
+{
+  "checkedOn": "2026-11-21",
+  "jurisdiction": "대한민국 거주자 개인",
+  "notice": "세법은 해마다 바뀝니다. 이 자료는 확인한 날의 법령을 정리한 일반 정보이며 세무 자문이 아닙니다. 신고 전에 국세청 자료나 세무사에게 확인하세요.",
+  "unverified": [
+    "미국 배당 15% 제한세율의 조세조약 원문",
+    "국내 상장 해외 ETF 보유기간과세의 과표기준가 산식",
+    "2026년 세법 개정안의 국회 처리 결과(2027년 시행분)",
+    "연금 수령을 시작할 수 있는 나이(55세)와 IRP의 위험자산 비중 제한"
+  ],
+  "pending": [
+    "생산적금융 ISA 신설안(2027년 가입분)이 국회 심의 중"
+  ],
+  "values": {
+    "overseasDeduction": 2500000,
+    "overseasRatePct": 22.0,
+    "withholdingPct": 15.4,
+    "financialIncomeThreshold": 20000000,
+    "transactionTaxPct": {
+      "kospi": 0.2,
+      "kosdaq": 0.2,
+      "konex": 0.1,
+      "kotc": 0.2,
+      "otc": 0.35
+    },
+    "giftDeduction": {
+      "spouse": 600000000,
+      "child-adult": 50000000,
+      "child-minor": 20000000,
+      "parent": 50000000,
+      "relative": 10000000,
+      "other": 0
+    },
+    "marriageBirthLimit": 100000000,
+    "giftBrackets": [
+      [
+        100000000,
+        10,
+        0
+      ],
+      [
+        500000000,
+        20,
+        10000000
+      ],
+      [
+        1000000000,
+        30,
+        60000000
+      ],
+      [
+        3000000000,
+        40,
+        160000000
+      ],
+      [
+        null,
+        50,
+        460000000
+      ]
+    ],
+    "filingCreditPct": 3,
+    "skipSurchargePct": 30,
+    "skipSurchargeMinorPct": 40,
+    "skipMinorThreshold": 2000000000,
+    "pensionSavingsLimit": 6000000,
+    "pensionTotalLimit": 9000000,
+    "pensionCreditPct": {
+      "standard": 13.2,
+      "lower-income": 16.5
+    }
+  },
+  "rules": [
+    {
+      "id": "overseas-deduction",
+      "title": "해외주식 양도소득 기본공제",
+      "rule": "국내 과세분과 해외주식을 합쳐 연 250만 원",
+      "basis": "소득세법 제103조",
+      "url": "https://www.law.go.kr/법령/소득세법/제103조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "overseas-rate",
+      "title": "해외주식 양도소득세율",
+      "rule": "20%에 지방소득세 2%를 더해 22% (중소기업 주식은 11%)",
+      "basis": "소득세법 제104조, 지방세법 제103조의3",
+      "url": "https://www.law.go.kr/법령/소득세법/제104조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "overseas-netting",
+      "title": "손익 통산",
+      "rule": "해외주식과 국내 과세 대상 주식(대주주·장외·비상장)끼리만 통산. 손실은 다음 해로 넘기지 못함",
+      "basis": "소득세법 제102조",
+      "url": "https://www.law.go.kr/법령/소득세법/제102조",
+      "applies": "2020년 양도분부터",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "overseas-filing",
+      "title": "해외주식 양도세 신고",
+      "rule": "다음 해 5월 1일~31일 확정신고. 예정신고 없음",
+      "basis": "소득세법 제110조",
+      "url": "https://www.law.go.kr/법령/소득세법/제110조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "overseas-fx",
+      "title": "환율",
+      "rule": "양도가액과 필요경비를 받거나 낸 날의 기준환율 또는 재정환율",
+      "basis": "소득세법 시행령 제178조의5",
+      "url": "https://www.law.go.kr/법령/소득세법시행령/제178조의5",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "overseas-cost",
+      "title": "취득가액",
+      "rule": "취득 시기가 불분명하면 선입선출. 증권사가 계속 적용하는 이동평균법도 인정",
+      "basis": "소득세법 시행령 제162조",
+      "url": "https://www.law.go.kr/법령/소득세법시행령/제162조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "ria-relief",
+      "title": "국내시장 복귀계좌 한시 감면",
+      "rule": "2025년 12월 23일 이전부터 가진 해외주식을 2026년 중 전용 계좌로 팔고 1년 유지하면 양도소득금액 공제. 매도 시기별 100%(1~5월), 80%(6~7월), 50%(8~12월). 납입 한도 5천만 원",
+      "basis": "조세특례제한법 제91조의26",
+      "url": "https://www.law.go.kr/법령/조세특례제한법/제91조의26",
+      "applies": "2026년 12월 31일 양도분까지",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "domestic-listed",
+      "title": "국내 상장주식 소액주주",
+      "rule": "장내에서 판 소액주주의 차익은 과세 대상이 아님. 대주주 양도분과 장외 양도분만 과세",
+      "basis": "소득세법 제94조",
+      "url": "https://www.law.go.kr/법령/소득세법/제94조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "major-shareholder",
+      "title": "대주주 기준",
+      "rule": "직전 사업연도 말 기준 종목당 시가총액 50억 원 이상, 또는 지분율 코스피 1%·코스닥 2%·코넥스 4% 이상",
+      "basis": "소득세법 시행령 제157조",
+      "url": "https://www.law.go.kr/법령/소득세법시행령/제157조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "major-rate",
+      "title": "대주주 세율",
+      "rule": "과세표준 3억 원 이하 20%, 초과분 25%. 1년 미만 보유한 비중소기업 주식은 30%. 지방소득세 10% 별도",
+      "basis": "소득세법 제104조",
+      "url": "https://www.law.go.kr/법령/소득세법/제104조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "fit",
+      "title": "금융투자소득세",
+      "rule": "폐지됨. 관련 조문이 2024년 12월 31일 삭제됐고 시행 예정 조문 없음",
+      "basis": "소득세법 제87조의2 (삭제)",
+      "url": "https://www.law.go.kr/법령/소득세법/제87조의2",
+      "applies": "시행된 적 없음",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "transaction-tax",
+      "title": "증권거래세와 농어촌특별세",
+      "rule": "코스피 0.05%에 농어촌특별세 0.15%를 더해 0.20%. 코스닥·K-OTC 0.20%, 코넥스 0.10%, 비상장·장외 0.35%",
+      "basis": "증권거래세법 시행령 제5조, 농어촌특별세법 제5조",
+      "url": "https://www.law.go.kr/법령/증권거래세법시행령/제5조",
+      "applies": "2026년 1월 1일 양도분부터",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "etf-domestic",
+      "title": "국내주식형 ETF 매매차익",
+      "rule": "국내 주식 가격만 따르는 지수 ETF의 매매차익은 비과세. 분배금은 배당소득",
+      "basis": "소득세법 시행령 제26조의2",
+      "url": "https://www.law.go.kr/법령/소득세법시행령/제26조의2",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "etf-other",
+      "title": "국내 상장 해외·채권·파생 ETF 매매차익",
+      "rule": "배당소득으로 15.4% 원천징수하고 금융소득종합과세에 합산",
+      "basis": "소득세법 제17조, 시행령 제26조의2",
+      "url": "https://www.law.go.kr/법령/소득세법시행령/제26조의2",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "dividend-withholding",
+      "title": "배당·이자 원천징수",
+      "rule": "14%에 지방소득세 1.4%를 더해 15.4%",
+      "basis": "소득세법 제129조",
+      "url": "https://www.law.go.kr/법령/소득세법/제129조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "dividend-foreign",
+      "title": "해외주식 배당",
+      "rule": "국내 세율 14%에서 외국에서 뗀 세금을 뺀 나머지만 국내에서 원천징수. 종합과세 때는 외국납부세액공제",
+      "basis": "소득세법 제129조, 제57조",
+      "url": "https://www.law.go.kr/법령/소득세법/제57조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "financial-income",
+      "title": "금융소득종합과세",
+      "rule": "이자와 배당 합계가 연 2천만 원 이하이면 원천징수로 끝. 넘으면 다른 소득과 합쳐 종합과세",
+      "basis": "소득세법 제14조",
+      "url": "https://www.law.go.kr/법령/소득세법/제14조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "high-dividend",
+      "title": "고배당기업 배당 분리과세",
+      "rule": "요건을 갖춘 상장사 배당은 종합과세에서 빼고 14%(2천만 원 이하), 20%(3억 원 이하), 25%(50억 원 이하), 30%(초과) 적용. 지방소득세 별도. 다음 해 5월 신고 때 신청해야 함",
+      "basis": "조세특례제한법 제104조의27",
+      "url": "https://www.law.go.kr/법령/조세특례제한법/제104조의27",
+      "applies": "2026년 1월 1일 이후 받는 배당부터",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "isa",
+      "title": "ISA",
+      "rule": "납입 한도 연 2천만 원(미사용분 이월), 총 1억 원. 비과세 한도 일반형 200만 원, 서민형·농어민형 400만 원. 초과분 9.9% 분리과세. 계약 기간 3년 이상",
+      "basis": "조세특례제한법 제91조의18",
+      "url": "https://www.law.go.kr/법령/조세특례제한법/제91조의18",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "pension-credit",
+      "title": "연금계좌 세액공제",
+      "rule": "연금저축 600만 원, IRP를 합쳐 900만 원 한도. 공제율 13.2%, 종합소득 4,500만 원(근로소득만 있으면 총급여 5,500만 원) 이하는 16.5% (지방소득세 포함)",
+      "basis": "소득세법 제59조의3",
+      "url": "https://www.law.go.kr/법령/소득세법/제59조의3",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "pension-withdraw",
+      "title": "연금 수령과 중도 해지",
+      "rule": "연금으로 받으면 나이에 따라 3~5%(지방소득세 별도). 사적연금 합계 연 1,500만 원 초과분은 종합과세 또는 16.5% 분리과세 선택. 중도 해지는 16.5%",
+      "basis": "소득세법 제129조, 제64조의4",
+      "url": "https://www.law.go.kr/법령/소득세법/제129조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "gift-deduction",
+      "title": "증여재산공제",
+      "rule": "10년 합산 한도: 배우자 6억 원, 부모 등 직계존속에게서 성인 자녀 5천만 원·미성년 자녀 2천만 원, 자녀에게서 부모 5천만 원, 그 밖의 친족(4촌 이내 혈족·3촌 이내 인척) 1천만 원",
+      "basis": "상속세 및 증여세법 제53조",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법/제53조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "gift-marriage-birth",
+      "title": "혼인·출산 증여재산공제",
+      "rule": "직계존속에게서 혼인신고일 앞뒤 2년 안 또는 자녀 출생·입양일부터 2년 안에 받으면 1억 원 추가 공제. 혼인과 출산을 합쳐 1억 원",
+      "basis": "상속세 및 증여세법 제53조의2",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법/제53조의2",
+      "applies": "2024년 1월 1일 이후 증여분",
+      "confidence": "법령 본문 확인 (시행일은 2차 자료)"
+    },
+    {
+      "id": "gift-rates",
+      "title": "증여세율",
+      "rule": "과세표준 1억 원 이하 10%, 5억 원 이하 20%(누진공제 1천만 원), 10억 원 이하 30%(6천만 원), 30억 원 이하 40%(1억 6천만 원), 30억 원 초과 50%(4억 6천만 원). 상속세율도 같음",
+      "basis": "상속세 및 증여세법 제26조, 제56조",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법/제26조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "gift-filing",
+      "title": "증여세 신고",
+      "rule": "증여받은 달의 말일부터 3개월 안. 기한 안에 신고하면 세액의 3% 공제",
+      "basis": "상속세 및 증여세법 제68조, 제69조",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법/제68조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "gift-aggregation",
+      "title": "10년 합산",
+      "rule": "같은 사람(부모는 부부를 한 사람으로 봄)에게서 10년 안에 받은 증여가 1천만 원 이상이면 합쳐서 계산",
+      "basis": "상속세 및 증여세법 제47조",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법/제47조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "gift-skip",
+      "title": "세대를 건너뛴 증여",
+      "rule": "조부모가 손주에게 주면 세액의 30% 할증. 미성년자가 20억 원 넘게 받으면 40%",
+      "basis": "상속세 및 증여세법 제57조",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법/제57조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "gift-stock-value",
+      "title": "상장주식 증여 평가",
+      "rule": "증여일 앞뒤 각 2개월, 모두 4개월 동안의 매일 종가 평균",
+      "basis": "상속세 및 증여세법 제63조",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법/제63조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "gift-stock-value-overseas",
+      "title": "해외 상장주식 증여 평가",
+      "rule": "법 조문의 상장주식은 국내 시장만 가리킴. 실무에서는 앞뒤 2개월 종가 평균을 준용하고 평가기준일 환율로 환산",
+      "basis": "상속세 및 증여세법 시행령 제58조의3, 제58조의4",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법시행령/제58조의3",
+      "applies": "현행",
+      "confidence": "환율은 법령 확인, 종가 평균 준용은 2차 자료"
+    },
+    {
+      "id": "gift-then-sell",
+      "title": "증여받은 주식을 팔 때",
+      "rule": "배우자나 직계존비속에게 받은 주식을 1년 안에 팔면 증여한 사람의 취득가액으로 양도차익을 계산(이월과세)",
+      "basis": "소득세법 제97조의2",
+      "url": "https://www.law.go.kr/법령/소득세법/제97조의2",
+      "applies": "2025년 1월 1일 이후 증여분",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "inheritance",
+      "title": "상속세",
+      "rule": "세율은 증여세와 같음. 기초공제 2억 원, 일괄공제 5억 원, 배우자공제는 실제 상속분 기준 30억 원 한도. 상속 개시 달의 말일부터 6개월 안에 신고",
+      "basis": "상속세 및 증여세법 제18조~제21조, 제67조",
+      "url": "https://www.law.go.kr/법령/상속세및증여세법/제21조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "domestic-filing",
+      "title": "국내 주식 양도소득세 신고 (대주주·장외)",
+      "rule": "양도한 반기의 말일부터 2개월 안에 예정신고, 다음 해 5월에 확정신고",
+      "basis": "소득세법 제105조",
+      "url": "https://www.law.go.kr/법령/소득세법/제105조",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    },
+    {
+      "id": "isa-to-pension",
+      "title": "ISA 만기 자금의 연금계좌 전환",
+      "rule": "ISA 만기 자금을 연금계좌로 옮기면 옮긴 금액의 10%(최대 300만 원)를 세액공제 대상에 더함",
+      "basis": "소득세법 제59조의3",
+      "url": "https://www.law.go.kr/법령/소득세법/제59조의3",
+      "applies": "현행",
+      "confidence": "법령 본문 확인"
+    }
+  ]
+}

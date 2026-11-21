@@ -22,6 +22,8 @@ python3 harness/connectors.py doctor
 | 에이전트 스토어 MCP | 금융감독원 공시와 재무비율, 기업·ETF 데이터, 한국은행·통계청 지표, 국내외 상장사 리포트 | 국내 주식, 선물·매크로 | agent.store 계정. 유료 호출이 있을 수 있다 |
 | OpenDART | 국내 상장사 공시 목록, 주요 재무 계정 | 국내 주식 | 무료 키 (`DART_API_KEY`) |
 | FRED | 미국 금리·물가·고용 시계열 | 선물·매크로 | 무료 키 (`FRED_API_KEY`) |
+| yfinance | 미국 주식, 연속 선물, 환율 일봉 | 미국 주식, 선물·매크로, 퀀트 | `pip install yfinance`. 키 없음 |
+| FinanceDataReader | 국내 주식과 지수 일봉 | 국내 주식, 퀀트 | `pip install finance-datareader`. 키 없음 |
 | 토스증권 | 국내·미국 공개 시세, 본인 계좌 조회 | 국내 주식, 미국 주식 | Open API 키. `stock-toss-readonly` 스킬 참고 |
 | OpenBB 등 네 가지 오픈소스 | Nasdaq 일봉, SEC 공시, 토론, 모의 체결 | 미국 주식 | `stock-harness-integrations` 스킬 참고 |
 
@@ -61,6 +63,18 @@ python3 harness/connectors.py fred DGS10 --start 2026-01-01
 ```
 
 오류가 나면 오류 문장만 전하고 키를 화면에 다시 보여 달라고 하지 않는다.
+
+## 일봉 받기 (yfinance, FinanceDataReader)
+
+두 패키지는 사용자가 직접 설치한다. 하네스와 다른 파이썬에 설치했다면 `STOCK_HARNESS_DATA_PYTHON` 환경 변수로 그 파이썬 경로를 지정한다.
+
+```sh
+python3 harness/connectors.py bars NVDA --source yfinance --start 2025-01-01 --end 2026-11-20 --out nvda.csv
+python3 harness/connectors.py bars ES=F --source yfinance --start 2025-01-01 --end 2026-11-20 --out es.csv
+python3 harness/connectors.py bars 005930 --source fdr --start 2025-01-01 --end 2026-11-20 --out 005930.csv
+```
+
+받은 CSV는 `quant.py`의 백테스트, 지표, 비중, 순위 계산에 바로 쓸 수 있다. 수정주가 기준이라 증여 평가 같은 세무 계산에는 참고로만 쓴다.
 
 ## 이용 조건
 

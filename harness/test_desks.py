@@ -12,6 +12,7 @@ import connectors
 import desk
 import mailer
 import quant
+import tax
 import wiki
 from toss_client import HarnessError
 
@@ -97,6 +98,61 @@ class QuantTests(unittest.TestCase):
     def test_buy_and_hold_block_has_the_same_metrics(self):
         result = quant.backtest(quant.demo_bars())
         self.assertEqual(set(result["result"]) | {"note"}, set(result["buyAndHold"]))
+
+
+class AnalyticsTests(unittest.TestCase):
+    def test_indicators_read_a_steady_uptrend(self):
+        result = quant.indicators(bars([100 + index for index in range(150)]))
+        self.assertEqual((result["trend"], result["rsi14"], result["range52w"]["positionPct"]), ("상승 정렬", 100.0, 100.0))
+        self.assertEqual(result["movingAverages"]["sma20"], 239.5)
+        self.assertGreater(result["macd"]["line"], 0)
+        self.assertIsNone(quant.indicators(bars([100 + index for index in range(40)]))["movingAverages"]["sma60"])
+
+    def test_inverse_volatility_gives_the_calm_asset_more_weight(self):
+        calm = bars([100 + (index % 2) * 0.5 for index in range(100)])
+        wild = bars([100 + (index % 2) * 10 for index in range(100)])
+        result = quant.weights({"calm": calm, "wild": wild})
+        self.assertGreater(result["weightsPct"]["calm"], 90)
+        self.assertEqual(result["correlations"][0]["correlation"], 1.0)
+        self.assertEqual(quant.weights({"calm": calm, "wild": wild}, "equal")["weightsPct"], {"calm": 50.0, "wild": 50.0})
+        optimal = quant.minimum_variance([[4.0, 0.0], [0.0, 1.0]], [0.5, 0.5])
+        self.assertAlmostEqual(optimal[0], 0.2, places=3)
+        self.assertAlmostEqual(sum(optimal), 1.0, places=6)
+        hedged = quant.minimum_variance([[1.0, 0.9, 0.0], [0.9, 1.0, 0.0], [0.0, 0.0, 1.0]], [1 / 3] * 3)
+        self.assertTrue(all(value >= 0 for value in hedged))
+        self.assertGreater(hedged[2], hedged[0])
+        low = quant.weights({"calm": calm, "wild": wild}, "min-variance")
+        self.assertLessEqual(low["portfolioVolatilityPct"], quant.weights({"calm": calm, "wild": wild})["portfolioVolatilityPct"] + 0.01)
+        with self.assertRaises(HarnessError):
+            quant.weights({"calm": calm})
+        with self.assertRaises(HarnessError):
+            quant.weights({"calm": calm, "flat": bars([100.0] * 100)})
+
+    def test_rank_prefers_momentum_with_low_volatility(self):
+        strong = bars([100 * 1.002 ** index for index in range(200)])
+        weak = bars([100 + (index % 2) * 8 - index * 0.05 for index in range(200)])
+        ranking = quant.rank({"strong": strong, "weak": weak})["ranking"]
+        self.assertEqual([row["asset"] for row in ranking], ["strong", "weak"])
+        with self.assertRaises(HarnessError):
+            quant.rank({"strong": strong, "short": bars([100.0] * 50)})
+
+    def test_limits_only_shrink_and_leave_the_rest_in_cash(self):
+        capped = quant.apply_limits({"A": 40, "B": 30, "C": -50}, max_position=25, max_gross=60)
+        self.assertEqual(capped["weightsPct"], {"A": 20.0, "B": 20.0, "C": -20.0})
+        self.assertEqual((capped["grossPct"], capped["cashPct"]), (60.0, 40.0))
+        self.assertEqual([event["rule"] for event in capped["events"]], ["max-position"] * 3 + ["max-gross"])
+        halved = quant.apply_limits({"A": 20, "B": 10}, drawdown_pct=12)
+        self.assertEqual(halved["weightsPct"], {"A": 10.0, "B": 5.0})
+        self.assertEqual(quant.apply_limits({"A": 20}, drawdown_pct=25)["weightsPct"], {"A": 0.0})
+        self.assertEqual(quant.apply_limits({"A": 10, "B": 5})["events"], [])
+        for original, limited in zip((40, 30, -50), capped["weightsPct"].values()):
+            self.assertLessEqual(abs(limited), abs(original))
+        with self.assertRaises(HarnessError):
+            quant.apply_limits({"A": "많이"})
+
+    def test_extra_metrics_are_reported(self):
+        result = quant.backtest(quant.demo_bars())["result"]
+        self.assertTrue({"sortino", "calmar", "winDaysPct", "bestDayPct", "worstDayPct"} <= set(result))
 
 
 def corp_archive(rows):
@@ -201,10 +257,51 @@ class ConnectorTests(unittest.TestCase):
         self.assertNotIn("d" * 40, text)
         self.assertIn("https://agent.store/mcp", text)
 
-    def test_catalog_marks_live_trading_tools(self):
-        entries = connectors.catalog()["projects"]
-        self.assertTrue(all({"repository", "license", "use", "liveOrders", "harnessMode"} <= set(entry) for entry in entries))
-        self.assertTrue(all(entry["harnessMode"] in ("research", "backtest", "paper", "data", "reference") for entry in entries))
+    def test_catalog_follows_its_own_rubric(self):
+        document = connectors.catalog()
+        entries = document["projects"]
+        self.assertGreaterEqual(len(entries), 20)
+        for entry in entries:
+            self.assertTrue({"repository", "license", "liveOrders", "scores", "total", "verdict", "adopted"} <= set(entry))
+            self.assertEqual(entry["total"], sum(entry["scores"].values()))
+            self.assertTrue(all(value in (0, 1, 2) for value in entry["scores"].values()))
+            if entry["verdict"] in ("연결", "접목"):
+                self.assertGreaterEqual(entry["total"], 8, entry["repository"])
+                self.assertGreaterEqual(min(entry["scores"][key] for key in ("license", "orderRisk", "maintenance")), 1)
+            if entry["liveOrders"]:
+                self.assertLessEqual(entry["scores"]["orderRisk"], 1, entry["repository"])
+        self.assertEqual(document["summary"], {verdict: sum(1 for entry in entries if entry["verdict"] == verdict)
+                                               for verdict in ("연결", "접목", "참고", "제외")})
+
+    def test_evaluate_scores_candidates(self):
+        good = connectors.evaluate("example/lib", "MIT", "none", 2, 2, 2)
+        self.assertEqual((good["total"], good["verdict"]), (10, "연결 또는 접목 후보"))
+        bot = connectors.evaluate("example/bot", "GPL-3.0", "core", 1, 0, 1)
+        self.assertEqual((bot["verdict"], len(bot["reasons"])), ("제외", 2))
+        self.assertEqual(connectors.evaluate("example/old", "Apache-2.0", "none", 30, 2, 2)["verdict"], "참고")
+        for spelling, expected in (("Apache 2.0", 2), ("BSD", 2), ("apache", 2), ("LGPL", 1), ("MPL-2.0", 1),
+                                   ("GPL-3.0", 0), ("AGPL-3.0", 0), ("none", 0)):
+            self.assertEqual(connectors.evaluate("x", spelling, "none", 1, 2, 2)["scores"]["license"], expected, spelling)
+        with self.assertRaises(HarnessError):
+            connectors.evaluate("x", "MIT", "maybe", 1, 2, 2)
+
+    def test_bars_writes_a_clean_csv_and_reports_missing_packages(self):
+        target = self.cache / "es.csv"
+        result = connectors.bars("es=f", "yfinance", "2026-01-01", "2026-02-01", target,
+                                 run=lambda source, payload: [["2026-01-02", 100.0], ["2026-01-05", 101.5],
+                                                              ["2026-01-05", 9.0], ["2026-01-06", float("nan")]])
+        self.assertEqual((result["symbol"], result["rows"], result["lastClose"]), ("ES=F", 2, 101.5))
+        self.assertEqual(target.read_text(encoding="utf-8"), "date,close\n2026-01-02,100.0\n2026-01-05,101.5\n")
+        for arguments in (("ES=F", "bloomberg", "2026-01-01", "2026-02-01", self.cache / "a.csv"),
+                          ("ES=F", "yfinance", "2026-02-01", "2026-01-01", self.cache / "a.csv"),
+                          ("ES=F", "yfinance", "2026-01-01", "2026-02-01", target),
+                          ("bad symbol", "fdr", "2026-01-01", "2026-02-01", self.cache / "a.csv")):
+            with self.assertRaises(HarnessError):
+                connectors.bars(*arguments, run=lambda source, payload: [])
+        with mock.patch.dict(os.environ, {connectors.DATA_PYTHON: "/nonexistent/python"}):
+            with self.assertRaises(HarnessError) as caught:
+                connectors.bars("ES=F", "yfinance", "2026-01-01", "2026-02-01", self.cache / "b.csv")
+        self.assertIn("pip install yfinance", str(caught.exception))
 
 
 class DeskJournalTests(unittest.TestCase):
@@ -444,6 +541,88 @@ class WikiTests(unittest.TestCase):
         self.assertIn("커넥터", wiki.status(config)["note"])
         with self.assertRaises(HarnessError):
             wiki.add(config, self.report, "company", "NVDA", "제목", "요약")
+
+class TaxTests(unittest.TestCase):
+    def test_rules_carry_a_source_for_every_entry(self):
+        document = tax.rules()
+        self.assertGreaterEqual(len(document["rules"]), 25)
+        for rule in document["rules"]:
+            self.assertTrue(rule["url"].startswith("https://www.law.go.kr/"), rule["id"])
+            self.assertTrue(rule["basis"] and rule["applies"] and rule["confidence"], rule["id"])
+        self.assertEqual(len({rule["id"] for rule in document["rules"]}), len(document["rules"]))
+
+    def test_overseas_gain_applies_deduction_netting_and_rate(self):
+        result = tax.overseas_gain(10_000_000)
+        self.assertEqual((result["taxBase"], result["tax"], result["afterTax"]), (7_500_000, 1_650_000, 8_350_000))
+        self.assertEqual(tax.overseas_gain(2_500_000)["tax"], 0)
+        self.assertEqual(tax.overseas_gain(10_000_000, losses=4_000_000, domestic_taxable=-1_000_000)["taxBase"], 2_500_000)
+        self.assertEqual(tax.overseas_gain(1_000_000, losses=5_000_000)["tax"], 0)
+        self.assertEqual(tax.overseas_gain(10_000_000, small_business=True)["tax"], 825_000)
+        self.assertTrue(all(item["url"] for item in result["sources"]))
+        self.assertIn("세무 자문이 아닙니다", result["warnings"][-1])
+        with self.assertRaises(HarnessError):
+            tax.overseas_gain(-1)
+
+    def test_gift_tax_follows_deductions_and_brackets(self):
+        adult = tax.gift(100_000_000, "child-adult", gift_date="2026-11-21")
+        self.assertEqual((adult["deduction"], adult["taxBase"], adult["computedTax"], adult["filingCredit"], adult["taxDue"]),
+                         (50_000_000, 50_000_000, 5_000_000, 150_000, 4_850_000))
+        self.assertEqual(adult["filingDeadline"], "2027-02-28")
+        self.assertEqual(tax.gift(20_000_000, "child-minor")["taxDue"], 0)
+        self.assertEqual(tax.gift(30_000_000, "child-adult")["taxFreeRoom"], 20_000_000)
+        self.assertEqual(tax.gift(600_000_000, "spouse")["taxDue"], 0)
+        big = tax.gift(600_000_000, "child-adult")
+        self.assertEqual((big["taxBase"], big["topRatePct"], big["computedTax"]), (550_000_000, 30, 105_000_000))
+        self.assertEqual(tax.gift(150_000_000, "child-adult", marriage_birth=100_000_000)["taxDue"], 0)
+        self.assertEqual(tax.gift(5_000_000_000, "other")["computedTax"], 2_040_000_000)
+
+    def test_gift_aggregates_ten_years_and_surcharges_generation_skips(self):
+        again = tax.gift(50_000_000, "child-adult", prior=100_000_000, prior_tax=5_000_000)
+        self.assertEqual((again["aggregated"], again["taxBase"], again["computedTax"]), (150_000_000, 100_000_000, 10_000_000))
+        self.assertEqual(again["taxDue"], 5_000_000 - 150_000)
+        self.assertEqual(tax.gift(50_000_000, "child-adult", deduction_used=50_000_000)["taxBase"], 50_000_000)
+        skipped = tax.gift(100_000_000, "child-adult", skip_generation=True)
+        self.assertEqual((skipped["generationSkipSurcharge"], skipped["taxDue"]), (1_500_000, 6_305_000))
+        self.assertEqual(tax.gift(3_000_000_000, "child-minor", skip_generation=True)["generationSkipSurcharge"],
+                         int(tax.gift(3_000_000_000, "child-minor")["computedTax"] * 0.4))
+        for arguments in ((0, "child-adult"), (1, "cousin"), (10, "spouse", 0, 0, 0, 1),
+                          (10, "spouse", 0, 0, 0, 0, True), (10, "child-adult", 0, 0, 0, 200_000_000)):
+            with self.assertRaises(HarnessError):
+                tax.gift(*arguments)
+        with self.assertRaises(HarnessError):
+            tax.gift(10, "child-adult", gift_date="2026-02-30")
+
+    def test_gift_value_averages_two_months_each_side(self):
+        days = [date(2026, 1, 1) + timedelta(days=index) for index in range(200)]
+        series = [(day, 100.0 if day < date(2026, 4, 1) else 200.0) for day in days]
+        result = tax.gift_value(series, "2026-04-01")
+        self.assertEqual((result["window"], result["complete"]),
+                         ({"start": "2026-02-02", "end": "2026-05-31"}, True))
+        before = sum(1 for day in days if date(2026, 2, 2) <= day < date(2026, 4, 1))
+        after = sum(1 for day in days if date(2026, 4, 1) <= day <= date(2026, 5, 31))
+        self.assertEqual(result["averageClose"], round((before * 100 + after * 200) / (before + after), 4))
+        self.assertFalse(tax.gift_value(series[:120], "2026-04-01")["complete"])
+        with self.assertRaises(HarnessError):
+            tax.gift_value(series[:40], "2026-04-01")
+
+    def test_transaction_dividend_and_pension(self):
+        self.assertEqual(tax.transaction_tax("kospi", 10_000_000)["tax"], 20_000)
+        self.assertEqual(tax.transaction_tax("konex", 10_000_000)["tax"], 10_000)
+        self.assertEqual(tax.transaction_tax("otc", 10_000_000)["tax"], 35_000)
+        home = tax.dividend(1_000_000)
+        self.assertEqual((home["withheld"], home["comprehensiveTaxation"]), (154_000, False))
+        self.assertEqual(tax.dividend(1_000_000, foreign_withheld_pct=15)["withheld"], 150_000)
+        self.assertEqual(tax.dividend(1_000_000, foreign_withheld_pct=10)["withheld"], 144_000)
+        self.assertTrue(tax.dividend(5_000_000, other_financial_income=16_000_000)["comprehensiveTaxation"])
+        self.assertEqual(tax.pension_credit(6_000_000, 3_000_000)["taxCredit"], 1_188_000)
+        self.assertEqual(tax.pension_credit(9_000_000, 0, lower_income=True)["eligible"], 6_000_000)
+        self.assertEqual(tax.pension_credit(9_000_000, 3_000_000, lower_income=True)["taxCredit"], 1_485_000)
+        with self.assertRaises(HarnessError):
+            tax.transaction_tax("nasdaq", 1)
+
+    def test_stale_rules_are_flagged(self):
+        document = tax.rules() | {"checkedOn": "2025-01-01"}
+        self.assertIn("오래됐습니다", tax.envelope(document, {}, "gift-rates")["warnings"][0])
 
 if __name__ == "__main__":
     unittest.main()

@@ -30,7 +30,7 @@ description: 이동평균, 모멘텀, 돌파 같은 규칙 기반 전략을 일�
 ## 진행 순서
 
 1. **규칙을 글로 고정.** 대상, 기간, 진입·청산 조건, 비용 가정을 실행 전에 적는다. 결과를 보고 규칙을 바꾸면 바꿨다고 기록한다.
-2. **데이터 준비.** `date,close` 열이 있는 CSV가 필요하다. 사용자가 가진 파일을 쓰거나, 선택 통합이 설치돼 있으면 `python3 harness/integrations.py price TICKER --start ... --end ...` 결과를 CSV로 바꿔 쓴다. 데이터가 없으면 `python3 harness/quant.py demo`로 계산 방식만 시연하고 합성 데이터라고 밝힌다.
+2. **데이터 준비.** `date,close` 열이 있는 CSV가 필요하다. 사용자가 가진 파일을 쓰거나, 선택 통합이 설치돼 있으면 `python3 harness/integrations.py price TICKER --start ... --end ...` 결과를 CSV로 바꿔 쓴다. yfinance나 FinanceDataReader를 설치했다면 `python3 harness/connectors.py bars 기호 --source yfinance|fdr --start 날짜 --end 날짜 --out 파일.csv`로 일봉을 받는다(미국 주식과 연속 선물은 yfinance, 국내 종목은 fdr). 받은 데이터는 개인 연구용이며 재배포하지 않는다. 데이터가 없으면 `python3 harness/quant.py demo`로 계산 방식만 시연하고 합성 데이터라고 밝힌다.
 3. **실행.**
 
 | 목적 | 명령 |
@@ -41,6 +41,11 @@ description: 이동평균, 모멘텀, 돌파 같은 규칙 기반 전략을 일�
 | 단순 보유 비교 | `python3 harness/quant.py backtest bars.csv --strategy buy-hold` |
 | 선물 방식 | 위 명령에 `--capital 50000 --multiplier 50 --fee 2.5 --margin 15000` 추가 |
 | 수량 계산 | `python3 harness/quant.py size --capital 10000 --risk-pct 1 --entry 100 --stop 95` |
+| 기술 지표 | `python3 harness/quant.py indicators bars.csv` |
+| 여러 자산의 비중과 상관계수 | `python3 harness/quant.py weights a.csv b.csv c.csv --method inverse-vol` (또는 `equal`, `min-variance`) |
+| 모멘텀·변동성 순위 | `python3 harness/quant.py rank a.csv b.csv c.csv --lookback 120` |
+| 위험 한도 적용 | `python3 harness/quant.py limits '{"NVDA": 40, "005930": 30}' --max-position 25 --drawdown 12` |
+| 일봉 받기 (선택 패키지) | `python3 harness/connectors.py bars ES=F --source yfinance --start 2025-01-01 --end 2026-11-20 --out es.csv` |
 
 4. **점검.** `quant-research` 역할에 아래를 맡기거나 직접 확인한다.
    - 신호가 생긴 날의 수익을 가져가지 않았는가. 하네스는 종가 신호를 다음 봉 수익에만 적용한다.

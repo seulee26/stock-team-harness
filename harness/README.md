@@ -167,3 +167,42 @@ python3 harness/wiki.py status
 - `add`는 원본을 `sources/연도/`에 복사하고, `pages/종류/대상.md`에 날짜별 기록을 더한 뒤 `index.md`와 `log.md`를 갱신합니다.
 - 보유 수량이나 계좌 정보가 든 파일은 거절합니다. 내 PC 위키에만 `--allow-holdings`로 넣을 수 있습니다.
 - `mailer.py`도 보유 내역이 든 HTML을 본인이 아닌 주소로 보내는 것을 거절합니다.
+
+## 기술 지표, 비중, 순위, 위험 한도
+
+```bash
+python3 harness/quant.py indicators bars.csv
+python3 harness/quant.py weights a.csv b.csv c.csv --method min-variance
+python3 harness/quant.py rank a.csv b.csv c.csv --lookback 120
+python3 harness/quant.py limits '{"NVDA": 40, "005930": 30}' --max-position 25 --max-gross 100 --drawdown 12
+```
+
+- `indicators`는 종가만으로 이동평균 배열, RSI(14), MACD(12·26·9), 볼린저 밴드(20일, 2표준편차), 52주 위치를 계산합니다.
+- `weights`는 자산들이 함께 거래된 날의 수익률로 균등, 변동성 역수, 매수 전용 최소분산 비중과 상관계수를 계산합니다.
+- `limits`는 종목 한도, 낙폭에 따른 축소, 총노출 한도 순서로 비중을 줄이고 줄인 기록을 `events`로 남깁니다. 늘리는 일은 없습니다.
+
+## 일봉 받기와 오픈소스 평가
+
+```bash
+python3 harness/connectors.py bars ES=F --source yfinance --start 2025-01-01 --end 2026-11-20 --out es.csv
+python3 harness/connectors.py bars 005930 --source fdr --start 2025-01-01 --end 2026-11-20 --out 005930.csv
+python3 harness/connectors.py catalog
+python3 harness/connectors.py evaluate owner/repo --license MIT --live-orders none --months-since-update 2 --fit 2 --offline 2
+```
+
+- `bars`는 사용자가 설치한 yfinance나 FinanceDataReader를 별도 프로세스로 불러 `date,close` CSV를 만듭니다. 다른 파이썬에 설치했다면 `STOCK_HARNESS_DATA_PYTHON`으로 경로를 지정합니다.
+- `catalog`는 오픈소스 28개의 점수, 판정, 반영 범위를 보여 줍니다. `evaluate`는 새 후보를 같은 기준으로 채점합니다.
+
+## 한국 투자 세금
+
+`tax.py`는 `tax-rules-kr.json`의 규칙으로 계산합니다. 규칙마다 근거 조문과 확인 수준이 있고, 확인한 지 여섯 달이 넘거나 해가 바뀌면 경고를 붙입니다. 일반 정보이며 세무 자문이 아닙니다.
+
+```bash
+python3 harness/tax.py rules
+python3 harness/tax.py overseas-gain --gains 12000000 --losses 3000000
+python3 harness/tax.py gift --amount 100000000 --relation child-adult --date 2026-11-21
+python3 harness/tax.py gift-value bars.csv --date 2026-09-01
+python3 harness/tax.py transaction-tax --market kospi --amount 10000000
+python3 harness/tax.py dividend --amount 1000000 --foreign-withheld-pct 15
+python3 harness/tax.py pension-credit --pension-savings 6000000 --irp 3000000
+```

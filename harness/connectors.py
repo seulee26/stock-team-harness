@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
+import sys
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -55,6 +57,18 @@ CONNECTORS = {
         "provides": "미국 금리·물가·고용 등 거시 시계열",
         "signup": "https://fred.stlouisfed.org/docs/api/api_key.html",
         "howTo": "python3 harness/connectors.py fred DGS10 --start 2026-01-01",
+    },
+    "yfinance": {
+        "kind": "package", "env": None, "desks": ["미국 주식", "선물·매크로", "퀀트"],
+        "provides": "미국 주식·ETF, 지수, 연속 선물(ES=F, NQ=F, CL=F, GC=F), 환율(KRW=X) 일봉",
+        "signup": "https://github.com/ranaroussi/yfinance",
+        "howTo": "pip install yfinance 후 python3 harness/connectors.py bars ES=F --source yfinance --start 2025-01-01 --end 2026-11-20 --out es.csv",
+    },
+    "fdr": {
+        "kind": "package", "env": None, "desks": ["국내 주식", "퀀트"],
+        "provides": "국내 상장 주식·ETF(6자리 종목코드), 지수(KS11, KQ11), 환율 일봉",
+        "signup": "https://github.com/FinanceData/FinanceDataReader",
+        "howTo": "pip install finance-datareader 후 python3 harness/connectors.py bars 005930 --source fdr --start 2025-01-01 --end 2026-11-20 --out samsung.csv",
     },
     "toss": {
         "kind": "local", "env": "TOSSINVEST_ENV_FILE", "desks": ["국내 주식", "미국 주식"],
@@ -243,6 +257,77 @@ def fred_series(series, start=None, end=None, *, get=fetch):
     }
 
 
+BAR_SOURCES = {
+    "yfinance": {
+        "package": "yfinance", "provider": "Yahoo Finance via yfinance",
+        "covers": "미국 주식·ETF, 지수, 연속 선물(ES=F, NQ=F, CL=F, GC=F), 환율(KRW=X)",
+        "terms": "개인 연구용입니다. Yahoo 이용 조건을 따르며 받은 데이터를 재배포하지 않습니다.",
+        "code": (
+            "import yfinance as yf\n"
+            "frame = yf.download(payload['symbol'], start=payload['start'], end=payload['end'], progress=False, auto_adjust=True)\n"
+            "close = frame['Close']\n"
+            "close = close.iloc[:, 0] if hasattr(close, 'columns') else close\n"
+            "rows = [[index.strftime('%Y-%m-%d'), float(value)] for index, value in close.dropna().items()]\n"
+        ),
+    },
+    "fdr": {
+        "package": "finance-datareader", "provider": "FinanceDataReader",
+        "covers": "국내 상장 주식·ETF(6자리 종목코드), 지수(KS11, KQ11), 환율",
+        "terms": "데이터 저작권은 원 제공처(KRX 등)에 있습니다. 개인 연구용으로 쓰고 재배포하지 않습니다.",
+        "code": (
+            "import FinanceDataReader as fdr\n"
+            "frame = fdr.DataReader(payload['symbol'], payload['start'], payload['end'])\n"
+            "rows = [[index.strftime('%Y-%m-%d'), float(value)] for index, value in frame['Close'].dropna().items()]\n"
+        ),
+    },
+}
+DATA_PYTHON = "STOCK_HARNESS_DATA_PYTHON"
+
+
+def run_bar_source(source, payload):
+    interpreter = os.environ.get(DATA_PYTHON) or sys.executable
+    script = "import json, sys\npayload = json.load(sys.stdin)\n" + BAR_SOURCES[source]["code"] + "json.dump(rows, sys.stdout)\n"
+    try:
+        done = subprocess.run([interpreter, "-c", script], input=json.dumps(payload), text=True,
+                              capture_output=True, timeout=120, check=True)
+        return json.loads(done.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        package = BAR_SOURCES[source]["package"]
+        raise HarnessError(f"{source}에서 일봉을 받지 못했습니다. `pip install {package}`로 설치했는지, 기호와 기간이 맞는지 확인해 주세요. "
+                           f"다른 파이썬에 설치했다면 {DATA_PYTHON} 환경 변수로 그 파이썬 경로를 지정합니다.") from None
+
+
+def bars(symbol, source, start, end, out, *, run=run_bar_source):
+    if source not in BAR_SOURCES:
+        raise HarnessError("source는 yfinance 또는 fdr 중에서 골라 주세요.")
+    symbol = str(symbol).upper()
+    if not re.fullmatch(r"[A-Z0-9^][A-Z0-9.=^-]{0,14}", symbol):
+        raise HarnessError("기호를 확인해 주세요. 예: NVDA, ES=F, 005930")
+    start, end = iso_day(start), iso_day(end)
+    if not start < end:
+        raise HarnessError("시작일은 종료일보다 앞서야 합니다.")
+    target = Path(out)
+    if target.suffix.lower() != ".csv" or target.exists():
+        raise HarnessError("저장할 파일은 아직 없는 .csv 경로로 지정해 주세요.")
+    rows = run(source, {"symbol": symbol, "start": start, "end": end})
+    clean = []
+    for row in rows if isinstance(rows, list) else []:
+        if (isinstance(row, list) and len(row) == 2 and isinstance(row[1], (int, float))
+                and row[1] > 0 and row[1] == row[1] and (not clean or iso_day(row[0]) > clean[-1][0])):
+            clean.append((iso_day(row[0]), float(row[1])))
+    if len(clean) < 2:
+        raise HarnessError("받은 일봉이 없습니다. 기호와 기간을 확인해 주세요.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("date,close\n" + "".join(f"{day},{close}\n" for day, close in clean), encoding="utf-8")
+    entry = BAR_SOURCES[source]
+    return {
+        "dataScope": "public-market", "symbol": symbol, "provider": entry["provider"], "interval": "1d",
+        "rows": len(clean), "first": clean[0][0], "last": clean[-1][0], "lastClose": clean[-1][1], "file": str(target),
+        "retrievedAtKst": kst_now().isoformat(timespec="seconds"), "terms": entry["terms"],
+        "note": "수정주가 기준 종가입니다. 연속 선물은 만기 교체가 이어 붙여진 가격입니다.",
+    }
+
+
 def agent_store(client):
     setups = {
         "claude": {
@@ -272,13 +357,62 @@ def doctor():
     result = {}
     for name, entry in CONNECTORS.items():
         env = entry["env"]
-        state = "client-setup" if entry["kind"] == "mcp" else ("configured" if os.environ.get(env) else "not-configured")
+        if entry["kind"] == "mcp":
+            state = "client-setup"
+        elif entry["kind"] == "package":
+            state = "install-to-use"
+        else:
+            state = "configured" if os.environ.get(env) else "not-configured"
         result[name] = {"status": state, "keyVariable": env, **{key: entry[key] for key in ("provides", "desks", "signup", "howTo")}}
     return result
 
 
 def catalog():
     return json.loads(CATALOG.read_text(encoding="utf-8"))
+
+
+PERMISSIVE = ("mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc")
+WEAK_COPYLEFT = ("lgpl-2.1", "lgpl-3.0", "mpl-2.0")
+
+
+def evaluate(name, license_id, live_orders, months_since_update, fit, offline):
+    """Score an open-source candidate with the same rubric the catalog uses."""
+    name = " ".join(str(name).split())
+    if not 1 <= len(name) <= 100:
+        raise HarnessError("프로젝트 이름을 확인해 주세요.")
+    if live_orders not in ("none", "separable", "core"):
+        raise HarnessError("주문 기능은 none, separable, core 중에서 골라 주세요.")
+    if not (0 <= months_since_update <= 600 and fit in (0, 1, 2) and offline in (0, 1, 2)):
+        raise HarnessError("갱신 경과 개월 수는 0 이상, 적합성과 검증 가능성은 0~2로 입력해 주세요.")
+    key = "".join(str(license_id).lower().split()).replace("license", "").replace("_", "-")
+    permissive = key in PERMISSIVE or key.startswith(("mit", "apache", "bsd", "isc"))
+    weak = key in WEAK_COPYLEFT or key.startswith(("lgpl", "mpl"))
+    scores = {
+        "license": 2 if permissive else 1 if weak else 0,
+        "orderRisk": {"none": 2, "separable": 1, "core": 0}[live_orders],
+        "maintenance": 2 if months_since_update <= 6 else 1 if months_since_update <= 24 else 0,
+        "fit": fit, "offline": offline,
+    }
+    total = sum(scores.values())
+    eligible = total >= 8 and min(scores["license"], scores["orderRisk"], scores["maintenance"]) >= 1
+    if eligible:
+        verdict = "연결 또는 접목 후보"
+    elif scores["orderRisk"] == 0 or scores["fit"] == 0:
+        verdict = "제외"
+    else:
+        verdict = "참고"
+    reasons = []
+    if scores["license"] == 0:
+        reasons.append("라이선스가 허용적이지 않아 코드를 넣거나 함께 배포할 수 없습니다.")
+    if scores["orderRisk"] == 0:
+        reasons.append("실거래가 중심이라 주문을 넣지 않는 하네스 원칙과 맞지 않습니다.")
+    if scores["maintenance"] == 0:
+        reasons.append("2년 넘게 갱신되지 않았습니다.")
+    if scores["offline"] == 0:
+        reasons.append("유료 데이터나 별도 장비 없이는 검증할 수 없습니다.")
+    return {"dataScope": "calculation-only", "project": name, "scores": scores, "total": total,
+            "verdict": verdict, "reasons": reasons, "rubric": catalog()["rubric"],
+            "next": "후보라도 실제로 실행해 결과를 확인한 뒤에만 연결 또는 접목으로 기록합니다."}
 
 
 def main():
@@ -296,6 +430,19 @@ def main():
     financials.add_argument("stock_code")
     financials.add_argument("--year", type=int, required=True)
     financials.add_argument("--report", choices=DART_REPORTS, default="annual")
+    judge = commands.add_parser("evaluate", help="오픈소스 후보를 같은 기준으로 채점합니다")
+    judge.add_argument("name")
+    judge.add_argument("--license", required=True, help="SPDX 표기. 예: MIT, Apache-2.0, GPL-3.0, none")
+    judge.add_argument("--live-orders", required=True, help="none, separable, core")
+    judge.add_argument("--months-since-update", type=int, required=True)
+    judge.add_argument("--fit", type=int, required=True, help="0~2")
+    judge.add_argument("--offline", type=int, required=True, help="0~2")
+    daily = commands.add_parser("bars", help="일봉을 CSV로 받습니다 (yfinance 또는 FinanceDataReader 설치 필요)")
+    daily.add_argument("symbol")
+    daily.add_argument("--source", required=True, help="yfinance 또는 fdr")
+    daily.add_argument("--start", required=True)
+    daily.add_argument("--end", required=True)
+    daily.add_argument("--out", required=True, help="저장할 CSV 경로")
     fred = commands.add_parser("fred", help="미국 거시 시계열 (FRED)")
     fred.add_argument("series")
     fred.add_argument("--start")
@@ -308,6 +455,9 @@ def main():
         "dart-filings": lambda: dart_filings(args.stock_code, args.days, args.limit),
         "dart-financials": lambda: dart_financials(args.stock_code, args.year, args.report),
         "fred": lambda: fred_series(args.series, args.start, args.end),
+        "evaluate": lambda: evaluate(args.name, args.license, args.live_orders, args.months_since_update,
+                                     args.fit, args.offline),
+        "bars": lambda: bars(args.symbol, args.source, args.start, args.end, args.out),
     }
     try:
         print(json.dumps(actions[args.command](), ensure_ascii=False, indent=2, allow_nan=False))
