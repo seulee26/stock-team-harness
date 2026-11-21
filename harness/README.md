@@ -83,3 +83,36 @@ Codex에서 `$stock-harness-vibe-coding` 또는 Claude Code에서 `/us-stock-tea
 ## Codex와 Claude
 
 Codex는 패키지 루트의 `AGENTS.md`와 `.codex/agents/`를 읽습니다. Claude Code는 `claude --plugin-dir ./claude/us-stock-team`으로 설치 폴더를 읽습니다.
+
+## 백테스트와 수량 계산
+
+`quant.py`는 파이썬 기본 기능만 쓰며 주문을 보내지 않습니다. 종가에서 정한 포지션은 다음 봉의 수익에만 적용합니다.
+
+```bash
+python3 harness/quant.py demo
+python3 harness/quant.py backtest bars.csv --strategy sma-cross --fast 20 --slow 60
+python3 harness/quant.py backtest bars.csv --strategy breakout --allow-short --capital 50000 --multiplier 50 --fee 2.5 --margin 15000
+python3 harness/quant.py size --capital 10000 --risk-pct 1 --entry 100 --stop 95
+```
+
+- 입력 CSV에는 `date`(YYYY-MM-DD)와 `close` 열이 필요하고 오래된 날짜부터 정렬합니다.
+- `--multiplier`를 주면 선물 방식으로 계산합니다. 연속 선물의 만기 교체 손익과 증거금 변경은 반영하지 않습니다.
+- `--cost-bps`는 포지션을 바꿀 때 명목금액에 매기는 비용입니다. 세금과 호가 공백은 반영하지 않습니다.
+
+## 데이터 연결
+
+`connectors.py`의 연결은 사용자가 본인 키를 환경 변수로 지정했을 때만 동작합니다. 키는 출력하지 않으며 오류 문장에도 넣지 않습니다.
+
+```bash
+python3 harness/connectors.py doctor
+python3 harness/connectors.py agent-store --client claude
+python3 harness/connectors.py dart-filings 005930 --limit 5
+python3 harness/connectors.py dart-financials 005930 --year 2025
+python3 harness/connectors.py fred DGS10 --start 2026-01-01
+python3 harness/connectors.py catalog
+```
+
+- OpenDART는 `DART_API_KEY`, FRED는 `FRED_API_KEY`를 씁니다. 종목코드와 DART 회사 코드의 대응표는 `.local/cache/`에 일주일 보관합니다.
+- `agent-store`는 AI3 에이전트 스토어 MCP 게이트웨이를 Claude Code나 Codex에 등록하는 방법을 보여 줍니다. 등록은 사용자가 직접 실행합니다.
+- `catalog`는 검토한 퀀트·선물 오픈소스의 라이선스와 주문 기능 여부를 보여 줍니다. 이 도구들의 코드는 패키지에 들어 있지 않습니다.
+- 받은 데이터는 로컬 리서치에 쓰고 재배포하지 않습니다. FRED 자료를 쓴 결과물에는 FRED API를 사용했으며 세인트루이스 연준이 보증한 것이 아니라고 밝힙니다.

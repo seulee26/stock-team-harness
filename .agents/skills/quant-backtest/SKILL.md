@@ -1,0 +1,43 @@
+---
+name: quant-backtest
+description: 이동평균, 모멘텀, 돌파 같은 규칙 기반 전략을 일봉 데이터로 백테스트하고 수익률, 낙폭, 비용 민감도, 과최적화 위험을 점검한다. "이 전략 백테스트해 줘", "골든크로스 전략 성과", "모멘텀 전략 검증", "선물 추세추종 백테스트", "몇 주 사야 해 (포지션 사이징)"에 사용한다. 실거래 자동매매는 만들지 않는다.
+---
+
+# 퀀트 백테스트
+
+전략 아이디어를 규칙으로 바꾸고 과거 일봉으로 검증한다. 패키지 루트의 `harness/quant.py`는 파이썬 기본 기능만 쓰며 주문을 보내지 않는다.
+
+## 진행 순서
+
+1. **규칙을 글로 고정.** 대상, 기간, 진입·청산 조건, 비용 가정을 실행 전에 적는다. 결과를 보고 규칙을 바꾸면 바꿨다고 기록한다.
+2. **데이터 준비.** `date,close` 열이 있는 CSV가 필요하다. 사용자가 가진 파일을 쓰거나, 선택 통합이 설치돼 있으면 `python3 harness/integrations.py price TICKER --start ... --end ...` 결과를 CSV로 바꿔 쓴다. 데이터가 없으면 `python3 harness/quant.py demo`로 계산 방식만 시연하고 합성 데이터라고 밝힌다.
+3. **실행.**
+
+| 목적 | 명령 |
+| --- | --- |
+| 이동평균 교차 | `python3 harness/quant.py backtest bars.csv --strategy sma-cross --fast 20 --slow 60` |
+| 추세 모멘텀 | `python3 harness/quant.py backtest bars.csv --strategy momentum --lookback 120` |
+| 고점·저점 돌파 | `python3 harness/quant.py backtest bars.csv --strategy breakout --lookback 55 --allow-short` |
+| 단순 보유 비교 | `python3 harness/quant.py backtest bars.csv --strategy buy-hold` |
+| 선물 방식 | 위 명령에 `--capital 50000 --multiplier 50 --fee 2.5 --margin 15000` 추가 |
+| 수량 계산 | `python3 harness/quant.py size --capital 10000 --risk-pct 1 --entry 100 --stop 95` |
+
+4. **점검.** `quant-research` 역할에 아래를 맡기거나 직접 확인한다.
+   - 신호가 생긴 날의 수익을 가져가지 않았는가. 하네스는 종가 신호를 다음 봉 수익에만 적용한다.
+   - 비용(`--cost-bps`)을 두 배로 올려도 결과가 남는가.
+   - 파라미터를 조금 바꿔도 비슷한가. 시험한 조합 수를 적는다.
+   - 기간에 큰 하락장이 들어 있는가. 표본이 1년 미만이면 결론을 내리지 않는다.
+   - 수정주가인가. 상장폐지 종목이 빠진 자료는 아닌가.
+5. **보고.** 총수익률, 연환산 수익률, 최대 낙폭, 변동성, 샤프 지수, 포지션 변경 횟수를 단순 보유와 나란히 표로 보여 준다. 출력의 `warnings`를 그대로 옮긴다.
+
+Codex에서는 `quant_research` 역할을 쓴다.
+
+## 더 정교한 도구
+
+`python3 harness/connectors.py catalog`에 검토한 오픈소스 목록과 라이선스, 주문 기능 여부가 있다. 연속 선물과 만기 교체를 제대로 다루려면 Lean이나 backtrader를, 팩터·머신러닝 연구에는 qlib을 사용자가 직접 설치해 쓰도록 안내한다. GPL·AGPL·Commons Clause 라이선스 도구는 패키지에 넣지 않는다. 주문 기능이 있는 도구는 백테스트 모드로만 쓰고 증권사·거래소 키를 연결하지 않는다.
+
+## 지킬 것
+
+- 백테스트는 과거 기록이다. 미래 수익을 보장한다고 쓰지 않는다.
+- 가장 좋은 결과 하나만 보여 주지 않는다. 나쁜 구간도 함께 보여 준다.
+- 실거래 자동매매 코드는 만들지 않는다.

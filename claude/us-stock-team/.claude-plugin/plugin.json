@@ -1,8 +1,8 @@
 {
   "name": "us-stock-team",
-  "description": "미국주식 리서치 팀, 공개 시세·공시, 상승·하락 검토, 모의투자와 로컬 토스증권 하네스를 제공합니다.",
+  "description": "AI 헤지펀드처럼 일하는 주식 리서치 팀. 미국·국내 주식, 선물·매크로, 퀀트 백테스트, 리스크 관리와 로컬 토스증권 하네스를 제공합니다.",
   "author": {
     "name": "US Stock Research Team"
   },
-  "version": "1.6.0"
+  "version": "2.0.0"
 }

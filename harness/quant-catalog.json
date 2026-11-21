@@ -1,0 +1,328 @@
+{
+  "checkedOn": "2026-11-21",
+  "starsSource": "GitHub API",
+  "policy": "하네스는 조사·백테스트·모의 체결만 합니다. 주문 기능이 있는 도구는 구조만 참고하거나 백테스트 모드로만 씁니다.",
+  "projects": [
+    {
+      "repository": "TauricResearch/TradingAgents",
+      "stars": 123312,
+      "license": "Apache-2.0",
+      "assets": [
+        "미국 주식",
+        "해외 주식"
+      ],
+      "use": "애널리스트·상승/하락 토론·위험 토론·포트폴리오 매니저 구조",
+      "desk": "투자위원회",
+      "liveOrders": false,
+      "harnessMode": "research",
+      "note": "integrations.py debate로 연결됨"
+    },
+    {
+      "repository": "openbq-org/OpenBB",
+      "stars": 75608,
+      "license": "Apache-2.0",
+      "assets": [
+        "미국 주식",
+        "거시"
+      ],
+      "use": "Nasdaq 일봉과 SEC 공시 수집",
+      "desk": "미국 주식",
+      "liveOrders": false,
+      "harnessMode": "data",
+      "note": "integrations.py price·filings로 연결됨"
+    },
+    {
+      "repository": "virattt/ai-hedge-fund",
+      "stars": 64780,
+      "license": "MIT",
+      "assets": [
+        "미국 주식"
+      ],
+      "use": "펀드·전략(pod)·모델 계층, 결정적 위험 한도, 모의 체결",
+      "desk": "리스크·운용",
+      "liveOrders": false,
+      "harnessMode": "paper",
+      "note": "integrations.py paper로 연결됨"
+    },
+    {
+      "repository": "anthropics/financial-services",
+      "stars": 41423,
+      "license": "Apache-2.0",
+      "assets": [
+        "미국 주식",
+        "채권"
+      ],
+      "use": "실적·DCF·비교기업·투자 논지 추적 절차",
+      "desk": "미국 주식",
+      "liveOrders": false,
+      "harnessMode": "reference",
+      "note": "integrations.py financial-skills로 연결됨"
+    },
+    {
+      "repository": "freqtrade/freqtrade",
+      "stars": 57115,
+      "license": "GPL-3.0",
+      "assets": [
+        "암호화폐"
+      ],
+      "use": "전략 백테스트와 파라미터 최적화",
+      "desk": "퀀트 리서치",
+      "liveOrders": true,
+      "harnessMode": "reference",
+      "note": "실거래 봇 기능이 있어 하네스는 구조만 참고"
+    },
+    {
+      "repository": "microsoft/qlib",
+      "stars": 50458,
+      "license": "MIT",
+      "assets": [
+        "주식"
+      ],
+      "use": "팩터 연구와 머신러닝 모델 백테스트 파이프라인",
+      "desk": "퀀트 리서치",
+      "liveOrders": false,
+      "harnessMode": "backtest",
+      "note": "기본 제공 데이터는 중국 시장. 사용자가 따로 설치해 쓰는 선택 도구"
+    },
+    {
+      "repository": "vnpy/vnpy",
+      "stars": 46441,
+      "license": "MIT",
+      "assets": [
+        "선물",
+        "옵션",
+        "중국 시장"
+      ],
+      "use": "선물 중심 이벤트 기반 백테스트와 게이트웨이 구조",
+      "desk": "선물·매크로",
+      "liveOrders": true,
+      "harnessMode": "reference",
+      "note": "실거래 게이트웨이가 있어 하네스는 구조만 참고"
+    },
+    {
+      "repository": "ccxt/ccxt",
+      "stars": 44940,
+      "license": "MIT",
+      "assets": [
+        "암호화폐"
+      ],
+      "use": "거래소 공개 시세 API 통합",
+      "desk": "선물·매크로",
+      "liveOrders": true,
+      "harnessMode": "reference",
+      "note": "주문 API를 포함하므로 하네스에서 호출하지 않음"
+    },
+    {
+      "repository": "nautechsystems/nautilus_trader",
+      "stars": 31715,
+      "license": "LGPL-3.0",
+      "assets": [
+        "선물",
+        "주식",
+        "외환",
+        "암호화폐"
+      ],
+      "use": "결정적 이벤트 기반 백테스트 엔진",
+      "desk": "퀀트 리서치",
+      "liveOrders": true,
+      "harnessMode": "backtest",
+      "note": "백테스트 모드만 사용"
+    },
+    {
+      "repository": "ranaroussi/yfinance",
+      "stars": 25971,
+      "license": "Apache-2.0",
+      "assets": [
+        "주식",
+        "선물",
+        "환율"
+      ],
+      "use": "Yahoo 공개 시세 내려받기 (ES=F, CL=F 등 연속 선물 기호)",
+      "desk": "선물·매크로",
+      "liveOrders": false,
+      "harnessMode": "data",
+      "note": "Yahoo 이용약관상 개인 연구용. 재배포 금지"
+    },
+    {
+      "repository": "mementum/backtrader",
+      "stars": 23765,
+      "license": "GPL-3.0",
+      "assets": [
+        "주식",
+        "선물"
+      ],
+      "use": "전략 백테스트 (증거금·승수 지원)",
+      "desk": "퀀트 리서치",
+      "liveOrders": true,
+      "harnessMode": "backtest",
+      "note": "RollOver 피드로 선물 만기 연결. GPL이라 번들하지 않고 사용자가 따로 설치"
+    },
+    {
+      "repository": "QuantConnect/Lean",
+      "stars": 22634,
+      "license": "Apache-2.0",
+      "assets": [
+        "주식",
+        "선물",
+        "옵션",
+        "외환"
+      ],
+      "use": "연속 선물과 롤오버를 지원하는 백테스트 엔진",
+      "desk": "선물·매크로",
+      "liveOrders": true,
+      "harnessMode": "backtest",
+      "note": "연속 선물·롤오버 문서화가 가장 잘 된 엔진. 로컬 백테스트 모드만 사용 (Docker 필요)"
+    },
+    {
+      "repository": "AI4Finance-Foundation/FinGPT",
+      "stars": 21595,
+      "license": "MIT",
+      "assets": [
+        "주식"
+      ],
+      "use": "금융 텍스트 감성 분석 모델",
+      "desk": "미국 주식",
+      "liveOrders": false,
+      "harnessMode": "reference",
+      "note": ""
+    },
+    {
+      "repository": "AI4Finance-Foundation/FinRL",
+      "stars": 17154,
+      "license": "MIT",
+      "assets": [
+        "주식"
+      ],
+      "use": "강화학습 매매 연구 환경",
+      "desk": "퀀트 리서치",
+      "liveOrders": true,
+      "harnessMode": "reference",
+      "note": "모의·실거래 예제가 있어 하네스는 구조만 참고"
+    },
+    {
+      "repository": "TA-Lib/ta-lib-python",
+      "stars": 12426,
+      "license": "BSD-2-Clause",
+      "assets": [
+        "전 자산"
+      ],
+      "use": "기술 지표 계산",
+      "desk": "퀀트 리서치",
+      "liveOrders": false,
+      "harnessMode": "research",
+      "note": ""
+    },
+    {
+      "repository": "polakowo/vectorbt",
+      "stars": 9901,
+      "license": "Apache-2.0 + Commons Clause",
+      "assets": [
+        "주식",
+        "암호화폐"
+      ],
+      "use": "벡터 연산 기반 대량 백테스트",
+      "desk": "퀀트 리서치",
+      "liveOrders": false,
+      "harnessMode": "backtest",
+      "note": "상업적 재판매 제한 조항이 있어 번들하지 않음. 무료판은 선물 승수·레버리지 미지원"
+    },
+    {
+      "repository": "kernc/backtesting.py",
+      "stars": 9269,
+      "license": "AGPL-3.0",
+      "assets": [
+        "주식",
+        "선물"
+      ],
+      "use": "가벼운 단일 종목 백테스트",
+      "desk": "퀀트 리서치",
+      "liveOrders": false,
+      "harnessMode": "backtest",
+      "note": "AGPL이라 번들하지 않음"
+    },
+    {
+      "repository": "ranaroussi/quantstats",
+      "stars": 7900,
+      "license": "Apache-2.0",
+      "assets": [
+        "전 자산"
+      ],
+      "use": "수익률 통계와 성과 보고서",
+      "desk": "리스크·운용",
+      "liveOrders": false,
+      "harnessMode": "research",
+      "note": ""
+    },
+    {
+      "repository": "PyPortfolio/PyPortfolioOpt",
+      "stars": 6175,
+      "license": "MIT",
+      "assets": [
+        "주식"
+      ],
+      "use": "평균-분산·블랙리터만 포트폴리오 최적화",
+      "desk": "리스크·운용",
+      "liveOrders": false,
+      "harnessMode": "research",
+      "note": ""
+    },
+    {
+      "repository": "dcajasn/Riskfolio-Lib",
+      "stars": 4615,
+      "license": "BSD-3-Clause",
+      "assets": [
+        "전 자산"
+      ],
+      "use": "위험 기반 포트폴리오 최적화",
+      "desk": "리스크·운용",
+      "liveOrders": false,
+      "harnessMode": "research",
+      "note": ""
+    },
+    {
+      "repository": "koreainvestment/open-trading-api",
+      "stars": 1676,
+      "license": "LICENSE 파일 없음",
+      "assets": [
+        "국내 주식",
+        "국내 선물옵션",
+        "해외 선물"
+      ],
+      "use": "한국투자증권 Open API 예제 (모의투자 도메인 포함)",
+      "desk": "국내 주식",
+      "liveOrders": true,
+      "harnessMode": "reference",
+      "note": "주문 API를 포함하므로 하네스에서 호출하지 않음. 예제 코드는 복사하지 않음"
+    },
+    {
+      "repository": "FinanceData/FinanceDataReader",
+      "stars": 1577,
+      "license": "MIT",
+      "assets": [
+        "국내 주식",
+        "미국 주식",
+        "지수",
+        "환율"
+      ],
+      "use": "KRX 종목 목록과 일봉 내려받기",
+      "desk": "국내 주식",
+      "liveOrders": false,
+      "harnessMode": "data",
+      "note": "사용자가 따로 설치해 쓰는 선택 도구"
+    },
+    {
+      "repository": "sharebook-kr/pykrx",
+      "stars": 1117,
+      "license": "LICENSE 파일 없음 (패키지 메타데이터는 MIT)",
+      "assets": [
+        "국내 주식",
+        "국내 선물 일봉"
+      ],
+      "use": "KRX 시세·수급·공매도 통계 수집",
+      "desk": "국내 주식",
+      "liveOrders": false,
+      "harnessMode": "data",
+      "note": "KRX 회원 계정이 필요할 수 있고 데이터 저작권은 KRX에 있음. 번들하지 않음"
+    }
+  ]
+}
