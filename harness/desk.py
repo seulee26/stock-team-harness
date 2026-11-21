@@ -40,7 +40,7 @@ def clean_symbol(value):
 def clean_text(value, label, limit=400):
     text = " ".join(str(value).split())
     if not text or len(text) > limit:
-        raise HarnessError(f"{label}은(는) 1~{limit}자로 입력해 주세요.")
+        raise HarnessError(f"{label} 항목은 1~{limit}자로 입력해 주세요.")
     return text
 
 
@@ -48,16 +48,19 @@ def clean_number(value, label):
     if value is None:
         return None
     if not math.isfinite(value) or value <= 0:
-        raise HarnessError(f"{label}은(는) 0보다 큰 숫자로 입력해 주세요.")
+        raise HarnessError(f"{label} 값은 0보다 큰 숫자로 입력해 주세요.")
     return value
 
 
 def clean_day(value):
     if value is None:
         return today().isoformat()
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(value)):
-        raise HarnessError("날짜는 YYYY-MM-DD 형식으로 입력해 주세요.")
-    return date.fromisoformat(value).isoformat()
+    try:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(value)):
+            raise ValueError
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        raise HarnessError("날짜는 달력에 있는 날로 YYYY-MM-DD 형식으로 입력해 주세요.") from None
 
 
 def load(path=JOURNAL):
@@ -221,7 +224,7 @@ def main():
 
     add = commands.add_parser("thesis-add", help="투자 논지 기록")
     add.add_argument("symbol")
-    add.add_argument("--market", choices=MARKETS, required=True)
+    add.add_argument("--market", required=True, help="US, KR, FUTURES, MACRO")
     add.add_argument("--statement", required=True)
     add.add_argument("--pillar", action="append", default=[], help="논지를 받치는 근거 (여러 번)")
     add.add_argument("--risk", action="append", default=[], help="논지가 깨지는 조건 (여러 번)")
@@ -230,7 +233,7 @@ def main():
     update = commands.add_parser("thesis-update", help="논지에 새 사실 기록")
     update.add_argument("symbol")
     update.add_argument("--note", required=True)
-    update.add_argument("--impact", choices=IMPACTS, required=True)
+    update.add_argument("--impact", required=True, help="strengthens, weakens, neutral")
     update.add_argument("--conviction", type=int, required=True)
     close = commands.add_parser("thesis-close", help="논지 닫기")
     close.add_argument("symbol")
@@ -239,8 +242,8 @@ def main():
 
     log = commands.add_parser("decision-log", help="의견을 기준 가격과 함께 기록")
     log.add_argument("symbol")
-    log.add_argument("--market", choices=MARKETS, required=True)
-    log.add_argument("--rating", choices=RATINGS, required=True)
+    log.add_argument("--market", required=True, help="US, KR, FUTURES, MACRO")
+    log.add_argument("--rating", required=True, help="strong-buy, buy, hold, reduce, sell")
     log.add_argument("--price", type=float, required=True)
     log.add_argument("--benchmark", required=True, help="비교 지수 기호. 예: SPX, KOSPI, KOSDAQ")
     log.add_argument("--benchmark-level", type=float, required=True)
@@ -253,8 +256,8 @@ def main():
     event = commands.add_parser("event-add", help="일정 기록")
     event.add_argument("date")
     event.add_argument("title")
-    event.add_argument("--kind", choices=EVENT_KINDS, default="other")
-    event.add_argument("--impact", choices=("H", "M", "L"), default="M")
+    event.add_argument("--kind", default="other", help="earnings, macro, corporate, expiry, other")
+    event.add_argument("--impact", default="M", help="H, M, L")
     event.add_argument("--symbol")
     listing = commands.add_parser("event-list", help="다가오는 일정")
     listing.add_argument("--days", type=int, default=30)

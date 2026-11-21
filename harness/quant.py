@@ -145,6 +145,7 @@ def backtest(bars, strategy="sma-cross", *, fast=20, slow=60, lookback=120, allo
     hold = [1.0]
     for index in range(used - 1):
         hold.append(hold[-1] * closes[index + 1] / closes[index])
+    hold_daily = [hold[index + 1] / hold[index] - 1 for index in range(used - 1)]
     warnings = ["과거 성과는 미래 수익을 보장하지 않습니다.", "체결은 종가 기준이며 호가 공백과 세금은 반영하지 않습니다."]
     if (days[used - 1] - days[0]).days < 365:
         warnings.append("표본이 1년 미만이라 결과를 일반화하기 어렵습니다.")
@@ -158,8 +159,7 @@ def backtest(bars, strategy="sma-cross", *, fast=20, slow=60, lookback=120, allo
                        "costBps": cost_bps},
         "period": {"start": days[0].isoformat(), "end": days[used - 1].isoformat(), "bars": used},
         "result": summarize(curve, days[:used], daily, held[:used]),
-        "buyAndHold": {"totalReturnPct": round((hold[-1] - 1) * 100, 2),
-                       "maxDrawdownPct": round(drawdown(hold) * 100, 2)},
+        "buyAndHold": summarize(hold, days[:used], hold_daily, [1] * used) | {"note": "비용을 빼지 않은 단순 보유"},
         "warnings": warnings,
     }
     if futures:
@@ -176,15 +176,27 @@ def backtest(bars, strategy="sma-cross", *, fast=20, slow=60, lookback=120, allo
     return result
 
 
-def position_size(capital, risk_pct, entry, stop, multiplier=1.0):
+def position_size(capital, risk_pct, entry, stop, multiplier=1.0, margin=None):
     values = (capital, risk_pct, entry, stop, multiplier)
     if not all(math.isfinite(value) and value > 0 for value in values) or entry == stop or risk_pct > 100:
         raise HarnessError("자본, 위험 비율(0~100), 진입가, 손절가, 승수를 확인해 주세요.")
+    if margin is not None and not (math.isfinite(margin) and margin > 0):
+        raise HarnessError("계약당 증거금은 0보다 큰 숫자로 입력해 주세요.")
     risk_per_unit = abs(entry - stop) * multiplier
     budget = capital * risk_pct / 100
     units = math.floor(budget / risk_per_unit)
+    capped = None
+    if margin is not None:
+        affordable = math.floor(capital / margin)
+        if units > affordable:
+            capped, units = units, affordable
     notional = units * entry * multiplier
-    return {
+    margin_fields = {} if margin is None else {
+        "marginPerUnit": margin, "marginNeeded": round(units * margin, 2),
+        "unitsBeforeMarginCap": capped,
+        "marginNote": "증거금으로 살 수 있는 수량까지만 계산했습니다. 증거금은 거래소와 증권사가 바꿀 수 있습니다.",
+    }
+    return margin_fields | {
         "dataScope": "calculation-only",
         "side": "long" if stop < entry else "short",
         "riskBudget": round(budget, 2),
@@ -241,6 +253,7 @@ def main():
     size.add_argument("--entry", type=float, required=True)
     size.add_argument("--stop", type=float, required=True)
     size.add_argument("--multiplier", type=float, default=1.0)
+    size.add_argument("--margin", type=float, help="계약당 증거금. 주면 증거금으로 살 수 있는 수량으로 제한합니다")
     args = parser.parse_args()
 
     def options():
@@ -250,9 +263,10 @@ def main():
 
     try:
         if args.command == "size":
-            result = position_size(args.capital, args.risk_pct, args.entry, args.stop, args.multiplier)
+            result = position_size(args.capital, args.risk_pct, args.entry, args.stop, args.multiplier, args.margin)
         elif args.command == "demo":
             result = backtest(demo_bars(), args.strategy, **options()) | {"dataScope": "synthetic-only"}
+            result["warnings"].insert(0, "합성 데이터로 만든 시연입니다. 실제 시장 결과가 아닙니다.")
         else:
             result = backtest(read_bars(args.csv), args.strategy, **options())
         print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))

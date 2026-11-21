@@ -52,7 +52,7 @@ export DART_API_KEY=<YOUR_KEY>
 export FRED_API_KEY=<YOUR_KEY>
 ```
 
-3. 동작을 확인한다.
+3. 동작을 확인한다. 환경 변수는 지정한 터미널에만 있으므로 이 세션에는 보이지 않을 수 있다. 사용자가 그 터미널에서 아래 명령을 직접 실행하거나, 그 터미널에서 Claude Code나 Codex를 다시 시작한 뒤 확인한다.
 
 ```sh
 python3 harness/connectors.py dart-filings 005930 --limit 5

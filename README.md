@@ -3,7 +3,8 @@
 AI에게 주식을 물어보면, 증권사 리서치센터와 헤지펀드처럼 여러 팀이 나눠 조사하고 서로 검증한 뒤 **주식을 몰라도 읽을 수 있는 한국어 리포트**로 정리해 주는 도구입니다. Claude Code와 Codex에서 씁니다.
 
 - "삼성전자 지금 사도 될까?", "엔비디아 분석해 줘"처럼 평소 말투로 물어보면 됩니다.
-- 전략, 뉴스, 미국 주식, 국내 주식, 산업, 선물·매크로, 퀀트, 리스크, 편집·준법까지 AI 24명이 일합니다.
+- 전략, 뉴스, 미국 주식, 국내 주식, 산업, 선물·매크로, 퀀트, 리스크, 편집·준법, 문서·위키까지 AI 26명이 일합니다.
+- 만든 리포트는 구글 드라이브나 내 PC의 리서치 위키에 쌓아 두고 다시 찾아볼 수 있습니다.
 - 모닝 브리프, 마감 시황, 뉴스 브리핑, 기업·산업 리포트, 실적 프리뷰 등 리포트 15종을 받을 수 있습니다.
 - 결과는 쉬운 말로 쓴 리포트(HTML·PDF)로 받고, 모든 숫자에 출처가 붙습니다.
 - DART, 한국은행, FRED 같은 데이터와 토스증권 계좌는 원하는 사람만 본인 키로 연결합니다.
@@ -107,6 +108,7 @@ flowchart TD
     RV --> PM["포트폴리오 매니저<br/>최종 의견 · 판단을 바꿀 조건"]
     PM --> ED["편집 · 준법<br/>쉬운 말 · 숫자 대조 · 고지 점검"]
     ED --> O(["리포트 15종<br/>HTML · PDF"])
+    O --> WK["문서 · 위키<br/>분류해 쌓기 · 찾기 · 점검"]
 ```
 
 | 조직 | 에이전트 | 맡은 일 |
@@ -120,6 +122,7 @@ flowchart TD
 | 리스크·성과 | `risk-review`, `risk-officer`, `performance` | 결론이 틀릴 수 있는 이유, 포트폴리오 한도, 과거 의견의 지수 대비 정산 |
 | 운용 | `portfolio-manager` | 팀 의견을 종합한 최종 의견 |
 | 편집·준법 | `editor`, `compliance` | 초보자가 읽을 수 있게 다듬기, 표현·고지·개인정보 점검 |
+| 문서·위키 | `wiki-librarian`, `wiki-auditor` | 리포트를 위키에 분류해 넣기, 오래되거나 어긋난 문서 점검 |
 | 운영 | `stock-sale-fee` | 팔 때 드는 수수료와 세금 |
 
 ### 하네스 구성
@@ -129,8 +132,9 @@ flowchart TD
 ```mermaid
 flowchart TD
     U(["사용자"]) --> AI["Claude Code · us-stock-team 플러그인<br/>또는 Codex · 하네스 폴더 열기"]
-    AI --> SK["스킬 28개"]
-    SK --> AG["전문 에이전트 24명"]
+    AI --> SK["스킬 29개"]
+    SK --> AG["전문 에이전트 26명"]
+    SK --> WK["harness/wiki.py<br/>리서치 위키 넣기 · 찾기 · 점검"]
     SK --> DK["harness/desk.py<br/>리포트 목록 · 논지 · 의견 정산 · 일정"]
     SK --> QN["harness/quant.py<br/>백테스트 · 수량 계산"]
     SK --> CN["harness/connectors.py<br/>본인 키로 여는 데이터 연결"]
@@ -147,6 +151,7 @@ flowchart TD
     OSS --> REP
     QN --> REP
     DK --> LOC(["내 PC 기록<br/>.local/desk/"])
+    WK --> WIKI[("리서치 위키<br/>구글 드라이브 또는 내 PC")]
     TOSS --> PC(["내 PC 화면<br/>계좌 정보는 여기까지만"])
 ```
 
@@ -158,7 +163,7 @@ flowchart TD
 
 ## Claude Code 플러그인으로 쓰기
 
-이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 28개와 전문 에이전트 24명이 추가됩니다.
+이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 29개와 전문 에이전트 26명이 추가됩니다.
 
 ### 불러오는 방법 두 가지
 
@@ -239,6 +244,7 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 | --- | --- |
 | `stock-harness-start` | 처음 설치했거나 사용법이 궁금할 때 |
 | `research-desk` | 어떤 리포트가 필요한지 고를 때 |
+| `research-wiki` | 리포트를 구글 드라이브나 내 PC의 위키에 쌓고 찾을 때 |
 | `report-email` | 리포트를 Gmail로 받거나 보낼 때 |
 | `stock-data-connections` | 내 데이터 키를 연결할 때 |
 | `stock-bull-bear-review` | 오를 이유와 내릴 이유를 나란히 볼 때 |
@@ -249,6 +255,32 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 | `stock-harness-integrations` | 오픈소스 도구 설치 상태를 확인할 때 |
 | `stock-harness-vibe-coding` | 하네스에 기능을 직접 추가할 때 |
 | `editorial-design` | 리포트를 읽기 편하게 다듬을 때 |
+
+### 리포트를 위키에 쌓기
+
+리포트를 한 번 읽고 끝내지 않고, 대상마다 한 장의 문서에 날짜별로 쌓아 둡니다. "위키 만들어 줘"라고 하면 저장 위치를 먼저 고르게 합니다.
+
+| 저장 위치 | 이런 사람에게 | 준비물 |
+| --- | --- | --- |
+| 내 PC | 혼자 쓰고, 계좌 정보가 든 점검 리포트도 보관하고 싶을 때 | 없음 |
+| 구글 드라이브 폴더 | 휴대폰에서도 보고 싶을 때 | PC의 Google Drive 앱 |
+| 구글 드라이브 커넥터 | Claude나 Codex에 Drive 커넥터를 연결했을 때 | Drive 커넥터 |
+
+```sh
+# 내 PC에 만들기
+python3 harness/wiki.py init --mode local --path ./wiki
+
+# 리포트 넣기
+python3 harness/wiki.py add reports/2026-11-20-company-NVDA.html --kind company --subject NVDA --title "매수 시점 평가" --summary "지금은 대기." --date 2026-11-20
+
+# 찾기, 점검하기
+python3 harness/wiki.py search NVDA
+python3 harness/wiki.py lint
+```
+
+- "지난번에 엔비디아 뭐라고 했지?"라고 물으면 새로 조사하기 전에 위키부터 봅니다.
+- "위키 정리해 줘"라고 하면 오래된 문서, 끊어진 링크, 중복 문서를 찾아 줍니다. 지우거나 합치는 일은 확인한 뒤에만 합니다.
+- 보유 수량이나 계좌 정보가 든 리포트는 구글 드라이브 위키에 넣지 않습니다.
 
 ### 리포트를 Gmail로 받기
 
@@ -302,10 +334,10 @@ python3 harness/desk.py scorecard
 
 - 계약 승수, 만기, 증거금을 거래소 공식 명세에서 확인합니다.
 - 가격이 1% 움직일 때 손익이 얼마인지, 레버리지가 몇 배인지 금액으로 보여 줍니다.
-- 손절 기준으로 몇 계약이 감당 가능한지 계산합니다.
+- 손절 기준과 증거금으로 몇 계약이 감당 가능한지 계산합니다. 아래 예시는 자본 10만 달러에서 2계약이 나옵니다. 결과가 0이면 그 자본으로는 한 계약도 과하다는 뜻입니다.
 
 ```sh
-python3 harness/quant.py size --capital 50000 --risk-pct 1 --entry 5000 --stop 4980 --multiplier 50
+python3 harness/quant.py size --capital 100000 --risk-pct 1 --entry 5000 --stop 4990 --multiplier 50 --margin 15000
 ```
 
 ## 퀀트 백테스트
@@ -472,6 +504,7 @@ python3 service/launch.py
 | `.agents/skills/`, `.codex/agents/` | Codex용 스킬과 에이전트 |
 | `harness/desk.py` | 리포트 목록, 투자 논지·의견·일정 기록 |
 | `harness/mailer.py` | 리포트를 내 Gmail로 보내기 |
+| `harness/wiki.py` | 리서치 위키 만들기, 넣기, 찾기, 점검 |
 | `harness/quant.py` | 백테스트와 수량 계산 |
 | `harness/connectors.py` | 데이터 연결 (OpenDART, FRED, 에이전트 스토어 안내) |
 | `harness/integrations.py` | 오픈소스 도구 네 가지 연동 |

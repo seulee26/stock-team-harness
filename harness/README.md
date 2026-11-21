@@ -149,3 +149,21 @@ python3 harness/mailer.py send report.html report.pdf --subject "[기업 분석]
 - `GMAIL_ADDRESS`와 `GMAIL_APP_PASSWORD` 환경 변수를 씁니다. 앱 비밀번호는 Google 계정에서 2단계 인증을 켠 뒤 만듭니다.
 - `--to`를 생략하면 본인에게 보냅니다. 받는 사람은 5명, 첨부는 `.html`과 `.pdf` 4개, 합계 20MB까지입니다.
 - 앱 비밀번호는 출력과 오류 문장에 넣지 않습니다.
+
+## 리서치 위키
+
+`wiki.py`는 사용자가 고른 폴더에 리서치 위키를 만들고 관리합니다. 네트워크를 쓰지 않습니다. 구글 드라이브는 PC에 동기화된 폴더 경로를 주거나, 커넥터 방식을 골라 AI 프로그램의 Drive 커넥터로 관리합니다.
+
+```bash
+python3 harness/wiki.py init --mode local --path ./wiki
+python3 harness/wiki.py add reports/2026-11-20-company-NVDA.html --kind company --subject NVDA --title "매수 시점 평가" --summary "지금은 대기." --date 2026-11-20
+python3 harness/wiki.py search NVDA
+python3 harness/wiki.py lint --stale-days 90
+python3 harness/wiki.py index
+python3 harness/wiki.py status
+```
+
+- `--mode`는 `local`, `drive-folder`, `drive-connector` 중 하나입니다. 설정은 `.local/wiki/config.json`에 저장합니다.
+- `add`는 원본을 `sources/연도/`에 복사하고, `pages/종류/대상.md`에 날짜별 기록을 더한 뒤 `index.md`와 `log.md`를 갱신합니다.
+- 보유 수량이나 계좌 정보가 든 파일은 거절합니다. 내 PC 위키에만 `--allow-holdings`로 넣을 수 있습니다.
+- `mailer.py`도 보유 내역이 든 HTML을 본인이 아닌 주소로 보내는 것을 거절합니다.

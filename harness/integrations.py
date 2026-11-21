@@ -121,7 +121,7 @@ result = {
 
 def run_adapter(name, code, payload, *, timeout=60, debate_key=None):
     if not is_installed(name, read_lock()[name], RUNTIME):
-        raise HarnessError(f"{name} 설치가 필요합니다. python3 harness/install_integrations.py")
+        raise HarnessError(f"{name} 설치가 필요합니다. python3.12 harness/install_integrations.py (Python 3.11 이상)")
     environment = clean_environment()
     if debate_key is not None:
         environment["OPENAI_API_KEY"] = debate_key

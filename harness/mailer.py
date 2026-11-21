@@ -18,6 +18,7 @@ ADDRESS = re.compile(r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
 MAX_RECIPIENTS = 5
 MAX_ATTACHMENT_BYTES = 20_000_000
 TYPES = {".html": ("text", "html"), ".pdf": ("application", "pdf")}
+HOLDINGS = re.compile(r"계좌번호|보유 ?수량|평가 ?금액|매수 ?가능 ?금액|accountNumber|cashBuyingPower", re.I)
 DISCLAIMER = "이 리포트는 조사 자료이며 투자 조언이나 권유가 아닙니다. 투자 판단과 책임은 본인에게 있습니다."
 
 
@@ -29,7 +30,9 @@ def clean_address(value):
 
 
 def credentials():
-    address = clean_address(os.environ.get(ADDRESS_VAR, ""))
+    if not os.environ.get(ADDRESS_VAR, "").strip():
+        raise HarnessError(f"{ADDRESS_VAR} 환경 변수에 보내는 Gmail 주소를 지정해 주세요. 설정 방법: mailer.py doctor")
+    address = clean_address(os.environ[ADDRESS_VAR])
     secret = os.environ.get(SECRET_VAR, "").replace(" ", "")
     if not re.fullmatch(r"[A-Za-z0-9]{16}", secret):
         raise HarnessError(f"{SECRET_VAR} 환경 변수에 Gmail 앱 비밀번호 16자리를 지정해 주세요.")
@@ -75,15 +78,34 @@ def deliver(message, sender, secret):
 
 
 def send(recipients, subject, summary, attachments, *, confirm=False, transport=deliver):
-    sender, secret = credentials()
-    message, recipients, files = build_message(sender, recipients or [sender], subject, summary, attachments)
-    outside = [address for address in recipients if address.lower() != sender.lower()]
+    try:
+        sender, secret = credentials()
+    except HarnessError:
+        if confirm:
+            raise
+        # A preview must work before setup so the user can check the mail first.
+        sender, secret = None, None
+    placeholder = "sender@example.com"
+    message, recipients, files = build_message(sender or placeholder, recipients or [sender or placeholder],
+                                               subject, summary, attachments)
+    if sender is None:
+        recipients = [address for address in recipients if address != placeholder]
+    outside = [address for address in recipients if sender is None or address.lower() != sender.lower()]
+    holdings = [name for name, suffix, body in files
+                if suffix == ".html" and HOLDINGS.search(body.decode("utf-8", "ignore"))]
+    if holdings and outside:
+        raise HarnessError("보유 수량이나 계좌 정보가 들어 있는 파일은 본인 주소로만 보낼 수 있습니다: "
+                           + ", ".join(holdings))
     preview = {
-        "dataScope": "outgoing-mail", "from": sender, "to": recipients, "subject": message["Subject"],
+        "dataScope": "outgoing-mail", "containsHoldings": bool(holdings), "from": sender or "(설정 필요)", "to": recipients or ["(본인 주소)"],
+        "subject": message["Subject"],
         "attachments": [{"name": name, "bytes": len(body)} for name, _, body in files],
         "outsideRecipients": outside,
     }
     if not confirm:
+        if sender is None:
+            return preview | {"sent": False, "setupNeeded": True,
+                              "next": f"보내려면 {ADDRESS_VAR}와 {SECRET_VAR}를 설정해야 합니다. 설정 방법: mailer.py doctor"}
         return preview | {"sent": False, "next": "내용이 맞으면 같은 명령에 --confirm을 붙여 다시 실행하세요."}
     try:
         transport(message, sender, secret)

@@ -12,6 +12,7 @@ import connectors
 import desk
 import mailer
 import quant
+import wiki
 from toss_client import HarnessError
 
 
@@ -89,6 +90,13 @@ class QuantTests(unittest.TestCase):
         self.assertEqual((future["units"], future["side"]), (2, "short"))
         with self.assertRaises(HarnessError):
             quant.position_size(10000, 1, 100, 100)
+        capped = quant.position_size(30000000, 5, 400, 399, multiplier=250000, margin=12000000)
+        self.assertEqual((capped["units"], capped["unitsBeforeMarginCap"], capped["marginNeeded"]), (2, 6, 24000000.0))
+        self.assertIsNone(quant.position_size(30000000, 1, 400, 399, multiplier=250000, margin=12000000)["unitsBeforeMarginCap"])
+
+    def test_buy_and_hold_block_has_the_same_metrics(self):
+        result = quant.backtest(quant.demo_bars())
+        self.assertEqual(set(result["result"]) | {"note"}, set(result["buyAndHold"]))
 
 
 def corp_archive(rows):
@@ -254,8 +262,11 @@ class DeskJournalTests(unittest.TestCase):
         window = desk.event_list(self.journal, 30, "2026-11-21")
         self.assertEqual([event["title"] for event in window["events"]], ["실적 발표", "FOMC"])
         self.assertEqual(window["events"][0]["symbol"], "NVDA")
+        for bad in ("12/10", "2026-13-45", "2026-02-30"):
+            with self.assertRaises(HarnessError):
+                desk.event_add(self.journal, bad, "잘못된 날짜")
         with self.assertRaises(HarnessError):
-            desk.event_add(self.journal, "12/10", "잘못된 날짜")
+            desk.event_add(self.journal, "2026-12-10", "종류 오류", "party")
 
     def test_journal_round_trip_is_private_and_rejects_bad_files(self):
         with tempfile.TemporaryDirectory() as work:
@@ -301,6 +312,28 @@ class MailerTests(unittest.TestCase):
         self.assertEqual((parts[0].get_filename(), parts[0].get_content_type()), ("report.html", "text/html"))
         self.assertIn("투자 조언이나 권유가 아닙니다", message.get_body().get_content())
 
+    def test_preview_works_before_setup_but_sending_does_not(self):
+        with mock.patch.dict(os.environ, {mailer.ADDRESS_VAR: "", mailer.SECRET_VAR: ""}):
+            preview = mailer.send(["friend@example.org"], "제목", "요약", [self.report], transport=self.transport)
+            self.assertEqual((preview["sent"], preview["setupNeeded"], preview["outsideRecipients"]),
+                             (False, True, ["friend@example.org"]))
+            self.assertEqual(mailer.send([], "제목", "요약", [self.report])["to"], ["(본인 주소)"])
+            with self.assertRaises(HarnessError) as caught:
+                mailer.send(["friend@example.org"], "제목", "요약", [self.report], confirm=True,
+                            transport=self.transport)
+            self.assertIn(mailer.ADDRESS_VAR, str(caught.exception))
+        self.assertEqual(self.sent, [])
+
+    def test_holdings_never_leave_to_another_person(self):
+        private = Path(self.work.name) / "portfolio.html"
+        private.write_text("<p>NVDA 보유 수량 12주, 평가 금액 2,100</p>", encoding="utf-8")
+        with self.assertRaises(HarnessError):
+            mailer.send(["boss@example.org"], "제목", "요약", [private], transport=self.transport)
+        with self.assertRaises(HarnessError):
+            mailer.send(["boss@example.org"], "제목", "요약", [private], confirm=True, transport=self.transport)
+        own = mailer.send([], "제목", "요약", [private], confirm=True, transport=self.transport)
+        self.assertEqual((own["sent"], own["containsHoldings"], len(self.sent)), (True, True, 1))
+
     def test_bad_input_is_rejected_before_any_send(self):
         other = Path(self.work.name) / "notes.txt"
         other.write_text("x", encoding="utf-8")
@@ -328,6 +361,89 @@ class MailerTests(unittest.TestCase):
         self.assertNotIn("abcdefghijklmnop", str(caught.exception))
         self.assertEqual(mailer.doctor()["status"], "configured")
 
+
+class WikiTests(unittest.TestCase):
+    def setUp(self):
+        self.work = tempfile.TemporaryDirectory()
+        self.addCleanup(self.work.cleanup)
+        self.base = Path(self.work.name)
+        self.config_path = self.base / "config.json"
+        self.report = self.base / "nvda.html"
+        self.report.write_text("<html><body>NVDA report</body></html>", encoding="utf-8")
+
+    def make(self, mode="local"):
+        wiki.init(mode, self.base / "wiki", switch=self.config_path.exists(), config_path=self.config_path)
+        return wiki.load_config(self.config_path)
+
+    def test_init_add_index_search_and_lint(self):
+        config = self.make()
+        result = wiki.add(config, self.report, "company", "NVDA", "매수 시점 평가", "지금은 대기", "2026-11-20", ["반도체"])
+        root = self.base / "wiki"
+        self.assertTrue((root / "sources/2026/2026-11-20-company-NVDA.html").is_file())
+        page = (root / "pages/company/NVDA.md").read_text(encoding="utf-8")
+        self.assertIn("### 2026-11-20 · 매수 시점 평가", page)
+        self.assertIn("(../../sources/2026/2026-11-20-company-NVDA.html)", page)
+        self.assertIn("[NVDA](pages/company/NVDA.md) · 기록 1건 · 최근 2026-11-20", (root / "index.md").read_text(encoding="utf-8"))
+        self.assertEqual(result["pages"], 1)
+        wiki.add(config, self.report, "company", "NVDA", "실적 리뷰", "가이던스 상회", "2026-11-25")
+        self.assertEqual(wiki.status(config)["entries"], 2)
+        self.assertEqual(wiki.search(config, "가이던스")["hits"][0]["page"], "pages/company/NVDA.md")
+        self.assertTrue(wiki.lint(config, 3650)["clean"])
+        (root / "sources/2026/2026-11-25-company-NVDA.html").unlink()
+        (root / "sources/2026/stray.pdf").write_bytes(b"x")
+        report = wiki.lint(config, 3650)
+        self.assertEqual((len(report["brokenLinks"]), report["unlinkedSources"], report["clean"]),
+                         (1, ["sources/2026/stray.pdf"], False))
+
+    def test_duplicates_bad_input_and_missing_wiki_are_rejected(self):
+        with self.assertRaises(HarnessError):
+            wiki.load_config(self.config_path)
+        config = self.make()
+        wiki.add(config, self.report, "company", "NVDA", "제목", "요약", "2026-11-20")
+        note = self.base / "notes.txt"
+        note.write_text("x", encoding="utf-8")
+        for arguments in (
+            (self.report, "company", "NVDA", "제목", "요약", "2026-11-20"),
+            (self.report, "poetry", "NVDA", "제목", "요약", "2026-11-21"),
+            (note, "company", "NVDA", "제목", "요약", "2026-11-21"),
+            (self.report, "company", "../etc", "제목", "요약", "2026-13-40"),
+            (self.report, "company", "///", "제목", "요약", "2026-11-21"),
+        ):
+            with self.assertRaises(HarnessError):
+                wiki.add(config, *arguments)
+        with self.assertRaises(HarnessError):
+            wiki.init("cloud", self.base / "x", config_path=self.config_path)
+
+    def test_holdings_stay_out_of_drive_wikis(self):
+        private = self.base / "portfolio.html"
+        private.write_text("<p>보유 수량 12주</p>", encoding="utf-8")
+        drive = self.make("drive-folder")
+        for allow in (False, True):
+            with self.assertRaises(HarnessError):
+                wiki.add(drive, private, "other", "내계좌", "점검", "요약", "2026-11-20", allow_holdings=allow)
+        local = self.make("local")
+        with self.assertRaises(HarnessError):
+            wiki.add(local, private, "other", "내계좌", "점검", "요약", "2026-11-20")
+        wiki.add(local, private, "other", "내계좌", "점검", "요약", "2026-11-20", allow_holdings=True)
+
+    def test_switching_location_needs_an_explicit_flag(self):
+        self.make()
+        with self.assertRaises(HarnessError) as caught:
+            wiki.init("drive-connector", config_path=self.config_path)
+        self.assertIn("--switch", str(caught.exception))
+        self.assertEqual(wiki.load_config(self.config_path)["mode"], "local")
+        wiki.init("local", self.base / "wiki", config_path=self.config_path)
+        wiki.init("drive-connector", switch=True, config_path=self.config_path)
+        self.assertEqual(wiki.load_config(self.config_path)["mode"], "drive-connector")
+        self.assertTrue((self.base / "wiki" / "index.md").is_file())
+
+    def test_connector_mode_keeps_files_to_the_connector(self):
+        result = wiki.init("drive-connector", config_path=self.config_path)
+        self.assertEqual((result["mode"], result["path"]), ("drive-connector", None))
+        config = wiki.load_config(self.config_path)
+        self.assertIn("커넥터", wiki.status(config)["note"])
+        with self.assertRaises(HarnessError):
+            wiki.add(config, self.report, "company", "NVDA", "제목", "요약")
 
 if __name__ == "__main__":
     unittest.main()
