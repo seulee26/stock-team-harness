@@ -4,7 +4,7 @@
 - 미국 상장 주식·ETF의 분석이나 비교 요청에는 `$us-stock-research`를 적용한다. 기준 시각과 정규장 세션을 명시하고 USD, 미국 동부시간을 쓴다.
 - 6자리 종목코드나 국내 상장사 요청에는 `$kr-stock-research`를 적용한다. KRW, 한국 시간, KRX 정규장 종가를 기본으로 쓴다.
 - 선물, 금리, 환율, 헤지 요청에는 `$futures-macro-research`를, 규칙 기반 전략 검증과 수량 계산에는 `$quant-backtest`를 적용한다.
-- 어떤 리포트가 필요한지 고를 때는 `$research-desk`를 적용한다. 리포트 종류별 스킬은 `$morning-note`, `$market-wrap`, `$news-brief`, `$weekly-strategy`, `$earnings-preview`, `$sector-report`, `$idea-screen`, `$thesis-tracker`, `$catalyst-calendar`, `$portfolio-review`다. 발행 전에 편집과 준법 점검을 거친다.
+- 어떤 리포트가 필요한지 고를 때는 `$research-desk`를 적용한다. 리포트 종류별 스킬은 `$morning-note`, `$market-wrap`, `$news-brief`, `$weekly-strategy`, `$earnings-preview`, `$sector-report`, `$idea-screen`, `$thesis-tracker`, `$catalyst-calendar`, `$portfolio-review`다. 리포트를 만들기 전에 종류·깊이·받는 형식을 사용자에게 한 번 묻고, 발행 전에 편집과 준법 점검을 거친다.
 - 여러 시장에 걸친 아이디어나 포트폴리오 점검처럼 팀 전체의 심사가 필요하면 `$hedge-fund-desk`로 투자위원회를 연다.
 - 데이터 연결(에이전트 스토어, OpenDART, FRED)을 묻거나 설정하려면 `$stock-data-connections`를 적용한다. 키는 사용자가 자기 터미널에만 넣는다.
 - 네 가지 연동 도구를 쓰거나 상태를 점검하려면 `$stock-harness-integrations`를 적용한다. 작업에 따라 `$stock-source-evidence`, `$stock-bull-bear-review`, `$stock-earnings-review`, `$stock-valuation-scenarios`, `$stock-paper-portfolio`, `$stock-toss-readonly`를 선택한다.
