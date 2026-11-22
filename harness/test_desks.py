@@ -534,6 +534,32 @@ class WikiTests(unittest.TestCase):
         self.assertEqual(wiki.load_config(self.config_path)["mode"], "drive-connector")
         self.assertTrue((self.base / "wiki" / "index.md").is_file())
 
+    def test_notion_connector_mode_and_short_entry(self):
+        result = wiki.init("notion-connector", config_path=self.config_path)
+        self.assertIn("notion-entry", result["next"])
+        config = wiki.load_config(self.config_path)
+        self.assertIn("Notion", wiki.status(config)["note"])
+        with self.assertRaises(wiki.HarnessError):
+            wiki.add(config, self.report, "company", "NVDA", "제목", "요약")
+        page = self.base / "long.html"
+        page.write_text("<html><head><title>NVDA 리포트</title></head><body><h1>NVDA</h1><h2>실적 <b>요약</b></h2>"
+                        + "<p>본문</p>" * 4000 + "<h2>위험</h2></body></html>", encoding="utf-8")
+        entry = wiki.notion_entry(page, "company", "NVDA", "실적 리뷰", "가이던스 상회", "2026-11-25", ["반도체"],
+                                  "https://example.com/report.pdf")
+        fields = {item["name"]: item for item in entry["fields"]}
+        self.assertEqual((fields["대상"]["value"], fields["종류"]["value"], fields["기준일"]["value"], fields["태그"]["value"]),
+                         ("NVDA", "기업", "2026-11-25", ["반도체"]))
+        self.assertIn("- 실적 요약\n- 위험\n", entry["content"])
+        self.assertIn("https://example.com/report.pdf", entry["content"])
+        self.assertNotIn("본문", entry["content"])
+        self.assertLess(entry["sizes"]["payloadChars"] * 20, entry["sizes"]["reportChars"])
+        private = self.base / "private.html"
+        private.write_text("<p>보유 수량 10주</p>", encoding="utf-8")
+        for arguments in ((private, "other", "내계좌", "점검", "요약"), (page, "movie", "NVDA", "제목", "요약"),
+                          (page, "company", "NVDA", "제목", "요약", None, (), "http://example.com/a")):
+            with self.assertRaises(wiki.HarnessError):
+                wiki.notion_entry(*arguments)
+
     def test_connector_mode_keeps_files_to_the_connector(self):
         result = wiki.init("drive-connector", config_path=self.config_path)
         self.assertEqual((result["mode"], result["path"]), ("drive-connector", None))

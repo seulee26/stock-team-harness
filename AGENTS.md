@@ -5,7 +5,7 @@
 - 6자리 종목코드나 국내 상장사 요청에는 `$kr-stock-research`를 적용한다. KRW, 한국 시간, KRX 정규장 종가를 기본으로 쓴다.
 - 선물, 금리, 환율, 헤지 요청에는 `$futures-macro-research`를, 규칙 기반 전략 검증과 수량 계산에는 `$quant-backtest`를 적용한다.
 - 어떤 리포트가 필요한지 고를 때는 `$research-desk`를 적용한다. 리포트 종류별 스킬은 `$morning-note`, `$market-wrap`, `$news-brief`, `$weekly-strategy`, `$earnings-preview`, `$sector-report`, `$idea-screen`, `$thesis-tracker`, `$catalyst-calendar`, `$portfolio-review`다. 리포트를 만들기 전에는 각 스킬의 "시작 전에 형식 확인"을 따른다: 대상·깊이·받는 형식·읽는 사람을 한 번에 묻되, 이미 밝힌 항목은 묻지 않고 "알아서 해 줘"에는 스킬의 기본값을 쓴다. 한두 문장으로 답할 사실 질문에는 묻지 않고 바로 답한다. 발행 전에 편집과 준법 점검을 거친다.
-- 리포트를 쌓아 두는 위키를 만들거나, 넣거나, 찾거나, 정리하는 요청에는 `$research-wiki`를 적용한다. 저장 위치(구글 드라이브, 내 PC)는 사용자가 고른다. "지난번에 뭐라고 했지" 같은 질문에는 새로 조사하기 전에 위키를 먼저 본다.
+- 리포트를 쌓아 두는 위키를 만들거나, 넣거나, 찾거나, 정리하는 요청에는 `$research-wiki`를 적용한다. 저장 위치(내 PC, 구글 드라이브, Notion)는 사용자가 고른다. Notion에는 `harness/wiki.py notion-entry`가 만든 짧은 기록을 Notion 커넥터로 넣는다. "지난번에 뭐라고 했지" 같은 질문에는 새로 조사하기 전에 위키를 먼저 본다.
 - 세금 질문(주식 양도·배당, 증여·상속, 절세 계좌)에는 `$kr-tax-desk`를 적용하고 `$stock-tax-kr`, `$gift-tax-kr`, `$tax-saving-accounts`로 넘긴다. 수치는 `harness/tax.py rules`의 규칙과 근거 조문을 쓰고, 규칙 확인일과 세무 자문이 아니라는 점을 밝힌다.
 - ETF의 구조와 비교에는 `$etf-research`를, 새 오픈소스를 넣을지 평가할 때는 `$oss-scout`를 적용한다. 오픈소스를 반영한 범위를 부풀려 말하지 않는다.
 - 리포트를 메일로 보내 달라는 요청에는 `$report-email`을 적용한다. 받는 사람, 제목, 첨부를 보여 주고 사용자가 확인한 뒤에만 보낸다.

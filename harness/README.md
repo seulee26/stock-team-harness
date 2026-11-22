@@ -152,7 +152,7 @@ python3 harness/mailer.py send report.html report.pdf --subject "[기업 분석]
 
 ## 리서치 위키
 
-`wiki.py`는 사용자가 고른 폴더에 리서치 위키를 만들고 관리합니다. 네트워크를 쓰지 않습니다. 구글 드라이브는 PC에 동기화된 폴더 경로를 주거나, 커넥터 방식을 골라 AI 프로그램의 Drive 커넥터로 관리합니다.
+`wiki.py`는 사용자가 고른 폴더에 리서치 위키를 만들고 관리합니다. 네트워크를 쓰지 않습니다. 구글 드라이브는 PC에 동기화된 폴더 경로를 주거나, 커넥터 방식을 골라 AI 프로그램의 Drive 커넥터로 관리합니다. Notion은 `notion-entry`가 결론·목차·원본 위치만 든 짧은 기록(속성과 본문)을 만들고, AI 프로그램의 Notion 커넥터가 데이터베이스에 넣습니다. `notion-entry`는 아무것도 전송하지 않으며 보유 내역이 든 파일은 거절합니다.
 
 ```bash
 python3 harness/wiki.py init --mode local --path ./wiki

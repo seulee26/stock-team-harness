@@ -1,7 +1,8 @@
-"""Research wiki in a folder the user chooses: this PC or a Google Drive folder synced to it."""
+"""Research wiki where the user chooses: this PC, a synced Google Drive folder, or a Drive or Notion connector."""
 
 import argparse
 from datetime import date, datetime
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
@@ -13,7 +14,8 @@ from workflows import KST
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / ".local" / "wiki" / "config.json"
-MODES = ("local", "drive-folder", "drive-connector")
+MODES = ("local", "drive-folder", "drive-connector", "notion-connector")
+CONNECTORS = {"drive-connector": "Google Drive", "notion-connector": "Notion"}
 KINDS = {
     "company": "기업", "sector": "산업", "macro": "매크로", "market": "시황",
     "strategy": "전략", "thesis": "투자 논지", "quant": "퀀트", "other": "기타",
@@ -69,8 +71,8 @@ def load_config(path=CONFIG):
 
 
 def wiki_root(config):
-    if config["mode"] == "drive-connector":
-        raise HarnessError("이 위키는 Google Drive 커넥터로 관리하도록 설정돼 있습니다. 파일 작업은 커넥터 도구로 합니다.")
+    if config["mode"] in CONNECTORS:
+        raise HarnessError(f"이 위키는 {CONNECTORS[config['mode']]} 커넥터로 관리하도록 설정돼 있습니다. 파일 작업은 커넥터 도구로 합니다.")
     root = Path(config["path"])
     if not (root / "index.md").is_file():
         raise HarnessError("위키 폴더를 찾지 못했습니다. 폴더가 옮겨졌다면 wiki.py init으로 다시 지정해 주세요.")
@@ -79,18 +81,18 @@ def wiki_root(config):
 
 def init(mode, path=None, *, switch=False, config_path=CONFIG):
     if mode not in MODES:
-        raise HarnessError("저장 방식은 local, drive-folder, drive-connector 중에서 골라 주세요.")
+        raise HarnessError("저장 방식은 " + ", ".join(MODES) + " 중에서 골라 주세요.")
     try:
         previous = load_config(config_path)
     except HarnessError:
         previous = None
-    target = None if mode == "drive-connector" or not path else str(Path(path).expanduser().resolve())
+    target = None if mode in CONNECTORS or not path else str(Path(path).expanduser().resolve())
     if previous and (previous["mode"], previous.get("path")) != (mode, target) and not switch:
-        where = previous.get("path") or "Google Drive 커넥터"
+        where = previous.get("path") or CONNECTORS.get(previous["mode"], "") + " 커넥터"
         raise HarnessError(f"이미 위키가 있습니다({previous['mode']}: {where}). 저장 위치를 바꾸려면 --switch를 붙여 주세요. "
                            "기존 문서는 지워지지 않지만 새 위치로 옮겨지지도 않습니다.")
     config = {"mode": mode, "createdOn": today()}
-    if mode == "drive-connector":
+    if mode in CONNECTORS:
         config["path"] = None
     else:
         if not path:
@@ -109,6 +111,7 @@ def init(mode, path=None, *, switch=False, config_path=CONFIG):
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"dataScope": "local-wiki", **config, "layout": list(LAYOUT),
             "next": ("커넥터 도구로 Drive에 같은 구조의 폴더를 만듭니다." if mode == "drive-connector"
+                     else "wiki.py notion-entry로 넣을 내용을 만들고 Notion 커넥터 도구로 데이터베이스에 넣습니다." if mode == "notion-connector"
                      else "리포트를 만들 때마다 wiki.py add로 넣습니다.")}
 
 
@@ -215,9 +218,81 @@ def lint(config, stale_days=90):
             "clean": not (stale or empty or broken or orphans)}
 
 
+class Outline(HTMLParser):
+    """Collect the report title and section headings without keeping the body."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tag, self.title, self.headings = None, "", []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("title", "h1", "h2"):
+            self.tag = tag
+            if tag == "h2":
+                self.headings.append("")
+
+    def handle_endtag(self, tag):
+        if tag == self.tag:
+            self.tag = None
+
+    def handle_data(self, data):
+        if self.tag == "h2":
+            self.headings[-1] += data
+        elif self.tag and not (self.tag == "title" and self.title):
+            self.title = (self.title + data) if self.tag == "h1" else data
+
+
+def notion_entry(source, kind, subject, title, summary, day=None, tags=(), link=None):
+    """Build a short Notion database row from a report on this PC. Nothing is sent anywhere."""
+    if kind not in KINDS:
+        raise HarnessError("종류는 " + ", ".join(KINDS) + " 중에서 골라 주세요.")
+    source = Path(source)
+    if source.suffix.lower() not in SOURCE_TYPES or source.is_symlink() or not source.is_file():
+        raise HarnessError("넣을 파일은 .html, .pdf, .md 중 하나여야 합니다.")
+    body = source.read_bytes()
+    if not body or len(body) > MAX_SOURCE_BYTES:
+        raise HarnessError("넣을 파일은 비어 있지 않고 30MB 이하여야 합니다.")
+    text = "" if source.suffix.lower() == ".pdf" else body.decode("utf-8", "ignore")
+    if HOLDINGS.search(text):
+        raise HarnessError("보유 수량이나 계좌 정보가 들어 있는 파일입니다. Notion 위키에는 넣지 않습니다. 내 PC 위키를 써 주세요.")
+    if link is not None and not re.fullmatch(r"https://[^\s<>\"']{4,500}", link):
+        raise HarnessError("원본 링크는 https:// 로 시작하는 주소여야 합니다.")
+    day, name = clean_day(day or today()), slug(subject)
+    title, summary = line(title, "제목", 120), line(summary, "요약", 1500)
+    tags = [slug(tag) for tag in tags][:8]
+    outline = Outline()
+    if source.suffix.lower() == ".html":
+        outline.feed(text)
+    elif source.suffix.lower() == ".md":
+        outline.headings = [row[3:] for row in text.splitlines() if row.startswith("## ")]
+    headings = [" ".join(item.split())[:80] for item in outline.headings if item.strip()][:14]
+    content = f"## 결론\n\n{summary}\n"
+    if headings:
+        content += "\n## 리포트 목차\n\n" + "".join(f"- {item}\n" for item in headings)
+    content += f"\n## 원본\n\n- 파일: {source.name} ({len(body) // 1024:,}KB)\n"
+    content += f"- 링크: {link}\n" if link else "- 원본 파일은 내 PC나 드라이브에 있습니다. Notion에는 요약만 넣었습니다.\n"
+    content += "\n조사 기록이며 투자 조언이나 권유가 아닙니다.\n"
+    fields = [
+        {"name": "대상", "type": "title", "value": name},
+        {"name": "종류", "type": "select", "value": KINDS[kind], "options": list(KINDS.values())},
+        {"name": "기준일", "type": "date", "value": day},
+        {"name": "제목", "type": "text", "value": title},
+        {"name": "결론", "type": "text", "value": summary},
+        {"name": "태그", "type": "multi_select", "value": tags},
+        {"name": "원본", "type": "url", "value": link},
+    ]
+    return {
+        "dataScope": "notion-payload", "database": "리서치 위키", "fields": fields, "content": content,
+        "sizes": {"reportChars": len(text) or None, "payloadChars": len(content) + sum(len(str(item["value"] or "")) for item in fields)},
+        "next": "Notion 커넥터의 데이터베이스 '리서치 위키'에 fields를 속성으로, content를 본문으로 한 행을 만듭니다. "
+                "데이터베이스가 없으면 fields의 name과 type으로 먼저 만들고, 어디에 만들지 사용자에게 확인받습니다.",
+    }
+
+
 def status(config):
-    if config["mode"] == "drive-connector":
-        return {"dataScope": "local-wiki", **config, "note": "Drive 커넥터로 관리합니다. 문서 수는 Drive에서 확인합니다."}
+    if config["mode"] in CONNECTORS:
+        name = CONNECTORS[config["mode"]]
+        return {"dataScope": "local-wiki", **config, "note": f"{name} 커넥터로 관리합니다. 문서 수는 {name}에서 확인합니다."}
     root = wiki_root(config)
     pages = read_pages(root)
     return {"dataScope": "local-wiki", **config, "pages": len(pages),
@@ -229,7 +304,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     start = commands.add_parser("init", help="저장 위치를 정하고 위키 폴더를 만듭니다")
-    start.add_argument("--mode", required=True, help="local, drive-folder, drive-connector")
+    start.add_argument("--mode", required=True, help=", ".join(MODES))
     start.add_argument("--path", help="위키 폴더. drive-folder는 PC에 동기화된 Google Drive 폴더 안의 경로")
     start.add_argument("--switch", action="store_true", help="이미 있는 위키의 저장 위치를 바꿉니다")
     put = commands.add_parser("add", help="리포트를 위키에 넣습니다")
@@ -241,6 +316,15 @@ def main():
     put.add_argument("--date", help="리포트 기준일 (기본: 오늘)")
     put.add_argument("--tag", action="append", default=[])
     put.add_argument("--allow-holdings", action="store_true", help="보유 내역이 든 파일을 내 PC 위키에 넣습니다")
+    note = commands.add_parser("notion-entry", help="Notion 데이터베이스에 넣을 짧은 기록을 만듭니다 (전송하지 않음)")
+    note.add_argument("file")
+    note.add_argument("--kind", required=True, help=", ".join(KINDS))
+    note.add_argument("--subject", required=True)
+    note.add_argument("--title", required=True)
+    note.add_argument("--summary", required=True, help="결론 두세 줄")
+    note.add_argument("--date", help="리포트 기준일 (기본: 오늘)")
+    note.add_argument("--tag", action="append", default=[])
+    note.add_argument("--link", help="원본을 볼 수 있는 https 주소 (예: 드라이브 링크)")
     commands.add_parser("index", help="목차를 다시 만듭니다")
     find = commands.add_parser("search", help="위키에서 찾습니다")
     find.add_argument("query")
@@ -251,6 +335,8 @@ def main():
     try:
         if args.command == "init":
             result = init(args.mode, args.path, switch=args.switch)
+        elif args.command == "notion-entry":
+            result = notion_entry(args.file, args.kind, args.subject, args.title, args.summary, args.date, args.tag, args.link)
         else:
             config = load_config()
             if args.command == "add":
