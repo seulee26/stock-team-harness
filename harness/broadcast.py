@@ -24,6 +24,8 @@ import sys
 from tempfile import TemporaryDirectory
 from urllib import error, request
 
+import music as music_library
+
 HOME = Path(os.environ.get("STOCK_HARNESS_BROADCAST_HOME") or Path.home() / ".local/share/stock-team/broadcast")
 TTS_PACKAGE = "supertonic"
 KINDS = ("title", "bullets", "table", "bars", "cards", "closing")
@@ -341,11 +343,13 @@ def cloud_voice(engine, voice_id=None, environ=os.environ):
     return credential, voice_id, environ.get(setting["model"][0], "").strip() or setting["model"][1]
 
 
-def cloud_speech(engine, text_value, speed, credential, voice_id, model, language="ko", *, post=post_audio):
+def cloud_speech(engine, text_value, speed, credential, voice_id, model, language="ko", *, post=post_audio, context=("", "")):
     if engine == "typecast":
+        # Neighbouring sentences let the service keep one steady newsreader tone across scenes.
         return post("https://api.typecast.ai/v1/text-to-speech", {"X-API-KEY": credential}, {
             "voice_id": voice_id, "text": text_value, "model": model,
             "language": {"ko": "kor", "en": "eng", "ja": "jpn"}.get(language, language),
+            "prompt": {"emotion_type": "smart", "previous_text": context[0][-300:], "next_text": context[1][:300]},
             "output": {"audio_format": "wav", "audio_tempo": speed},
         })
     return post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128",
@@ -391,8 +395,25 @@ def audio_seconds(path, *, execute=run):
     return float(execute(("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path)).strip())
 
 
+def mix_music(video, track, volume, seconds, *, execute=run):
+    """Loop the music under the narration, lower it while the voice speaks, and fade it in and out."""
+    mixed = video.with_name(video.stem + ".music.mp4")
+    fade_out = max(seconds - 3.0, 0)
+    graph = (
+        f"[1:a]volume={volume:.3f},afade=t=in:st=0:d=1.5,afade=t=out:st={fade_out:.2f}:d=3[bed];"
+        "[0:a]asplit=2[voice][key];"
+        "[bed][key]sidechaincompress=threshold=0.02:ratio=6:attack=15:release=450[duck];"
+        "[voice][duck]amix=inputs=2:duration=first:normalize=0[a]"
+    )
+    execute(("ffmpeg", "-y", "-loglevel", "error", "-i", video, "-stream_loop", "-1", "-i", track, "-filter_complex", graph,
+             "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ar", "44100",
+             "-t", f"{seconds:.3f}", "-movflags", "+faststart", mixed))
+    if mixed.is_file():
+        mixed.replace(video)
+
+
 def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_id=None, execute=run, tools=None,
-          post=post_audio, environ=os.environ, base=None):
+          post=post_audio, environ=os.environ, base=None, music=None, music_volume=0.14, music_credit=None):
     if engine not in ENGINES:
         raise BroadcastError("tts는 " + ", ".join(ENGINES) + " 중 하나여야 합니다.")
     external = ENGINES[engine]["external"]
@@ -411,6 +432,21 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
     output = Path(output)
     if output.suffix != ".mp4":
         raise BroadcastError("출력 파일 이름은 .mp4로 끝나야 합니다.")
+    track = None
+    if music:
+        if not 0.02 <= music_volume <= 0.5:
+            raise BroadcastError("music-volume은 0.02~0.5 사이여야 합니다. 해설이 묻히지 않게 0.1~0.2를 권합니다.")
+        if not Path(music).is_file():
+            raise BroadcastError("배경 음악 파일을 찾지 못했습니다.")
+        try:
+            track = music_library.read_credit(music, music_credit)
+        except music_library.MusicError as failure:
+            raise BroadcastError(str(failure)) from None
+        if track.get("attributionRequired"):
+            # A CC BY track must be credited where the video is shown, so the credit is put on the closing slide.
+            script = json.loads(json.dumps(script))
+            last = script["scenes"][-1]
+            last["note"] = " · ".join(part for part in (last.get("note"), track["credit"]) if part)
     voice = voice or script.get("voice", "F1")
     output.parent.mkdir(parents=True, exist_ok=True)
     durations = []
@@ -433,8 +469,11 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
                      f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
                      f"--screenshot={image}", page.as_uri()))
             if external:
+                scenes = script["scenes"]
+                context = (scenes[number - 2]["narration"] if number > 1 else "",
+                           scenes[number]["narration"] if number < len(scenes) else "")
                 audio.write_bytes(cloud_speech(engine, scene["narration"], speed, credential, voice_id, model,
-                                               script.get("language", "ko"), post=post))
+                                               script.get("language", "ko"), post=post, context=context))
             else:
                 execute((tools["tts"], "tts", scene["narration"], "-o", audio, "--lang", script.get("language", "ko"),
                          "--voice", voice, "--speed", f"{speed:.2f}"))
@@ -449,7 +488,7 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
                             "-map", "[v]", "-map", "1:a", "-preset", "veryfast"]
             else:
                 command += ["-vf", size + ",format=yuv420p", "-tune", "stillimage"]
-            command += ["-af", f"apad=pad_dur={PAUSE}", "-t", f"{seconds + PAUSE:.3f}",
+            command += ["-af", f"loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur={PAUSE}", "-t", f"{seconds + PAUSE:.3f}",
                         "-c:v", "libx264", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", part]
             execute(command)
             elapsed += seconds + PAUSE
@@ -460,6 +499,9 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
         listing.write_text("".join(f"file '{part.name}'\n" for part in parts), encoding="utf-8")
         execute(("ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing,
                  "-c", "copy", "-movflags", "+faststart", output))
+    total = sum(durations) + PAUSE * len(durations)
+    if track:
+        mix_music(output, music, music_volume, total, execute=execute)
     output.with_suffix(".vtt").write_text(subtitles(script, durations), encoding="utf-8")
     manifest = {
         "video": output.name, "subtitles": output.with_suffix(".vtt").name, "poster": output.with_suffix(".png").name,
@@ -467,6 +509,8 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
         "seconds": round(sum(durations) + PAUSE * len(durations), 1), "voice": voice_id if external else voice, "speed": speed,
         "ttsEngine": ENGINES[engine]["label"], "narrationSentTo": ENGINES[engine]["label"] if external else None,
         "sourceReport": script.get("source_report"),
+        "music": ({key: track.get(key) for key in ("title", "creator", "license", "source", "credit")} | {"volume": music_volume}
+                  if track else None),
         "sceneSeconds": [round(value, 2) for value in durations],
     }
     output.with_suffix(".manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -509,6 +553,9 @@ def main():
     make.add_argument("--tts", choices=tuple(ENGINES), default=os.environ.get("STOCK_HARNESS_TTS_ENGINE") or "supertonic",
                       help="음성 엔진. typecast와 elevenlabs는 해설 문장을 해당 서비스로 보내며 본인 키와 요금이 필요합니다")
     make.add_argument("--voice-id", help="Typecast 또는 ElevenLabs의 목소리 ID")
+    make.add_argument("--music", help="배경 음악 파일. music.py fetch로 받은 파일이면 라이선스 표기가 자동으로 들어갑니다")
+    make.add_argument("--music-volume", type=float, default=0.14, help="해설 대비 음악 크기 (0.02~0.5)")
+    make.add_argument("--music-credit", help="직접 권리를 확인한 음악의 표기 문구. 예: \"곡명 · 만든 사람 · CC BY 4.0\"")
     args = parser.parse_args()
     try:
         if args.command == "doctor":
@@ -523,7 +570,8 @@ def main():
                       "readingWarnings": reading_warnings(script)}
         else:
             result = build(load_script(args.script), args.output, voice=args.voice, speed=args.speed, engine=args.tts,
-                           voice_id=args.voice_id, base=Path(args.script).resolve().parent)
+                           voice_id=args.voice_id, base=Path(args.script).resolve().parent,
+                           music=args.music, music_volume=args.music_volume, music_credit=args.music_credit)
     except BroadcastError as error:
         print(f"방송 제작 실패: {error}", file=sys.stderr)
         return 1

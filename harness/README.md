@@ -205,6 +205,7 @@ python3 harness/broadcast.py build 대본.script.json 해설.mp4 --voice F1
 - `build`는 대본 JSON의 장면을 주식 방송 형식의 2D 화면(상단 바, 한 줄 자막, 흐르는 시세 띠, 선택 진행자 그림)으로 그려 Chrome으로 캡처하고, 오픈소스 TTS Supertonic으로 해설을 읽은 뒤 ffmpeg로 합칩니다. mp4, 자막(`.vtt`), 표지(`.png`), `.manifest.json`이 생깁니다.
 - `install`은 TTS를 별도 가상 환경에 설치합니다(Python 3.10 이상). 코드는 MIT, 음성 모델은 OpenRAIL-M이며 첫 실행 때 모델을 내려받습니다. 다른 위치의 실행 파일은 `STOCK_HARNESS_TTS`로 지정합니다.
 - `--tts typecast`나 `--tts elevenlabs`를 붙이면 유료 음성 서비스로 읽습니다. 키와 목소리 ID는 환경 변수 `TYPECAST_API_KEY`·`TYPECAST_VOICE_ID`, `ELEVENLABS_API_KEY`·`ELEVENLABS_VOICE_ID`에서만 읽고 출력과 오류에 넣지 않습니다. 이때 해설 문장이 해당 서비스의 고정된 HTTPS 주소로 전송됩니다.
+- `--music 파일`로 배경 음악을 넣습니다. `music.py search`가 Openverse에서 CC0, 퍼블릭 도메인, CC BY 곡을 찾고 `music.py fetch <id> --out 파일`이 파일과 `.license.json`을 받습니다. 기록이 없는 음악은 `--music-credit`로 출처를 적어야 넣을 수 있습니다. `music.py`는 Openverse와 곡이 올라간 사이트의 HTTPS 주소에만 연결합니다.
 - `check`는 형식과 예상 길이, 소리 내어 읽기 어려운 표기(영문, 숫자, 기호)를 알려 줍니다. `template`은 대본 예시를 출력합니다.
 - 모델 API를 부르지 않습니다. 계좌 정보가 든 리포트는 영상으로 만들지 않습니다.
 

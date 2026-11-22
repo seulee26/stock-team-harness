@@ -139,7 +139,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     U(["사용자"]) --> AI["Claude Code · us-stock-team 플러그인<br/>또는 Codex · 하네스 폴더 열기"]
-    AI --> SK["스킬 36개"]
+    AI --> SK["스킬 37개"]
     SK --> AG["전문 에이전트 34명"]
     SK --> TX["harness/tax.py<br/>한국 투자 세금 계산"]
     SK --> WK["harness/wiki.py<br/>리서치 위키 넣기 · 찾기 · 점검"]
@@ -171,7 +171,7 @@ flowchart TD
 
 ## Claude Code 플러그인으로 쓰기
 
-이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 36개와 전문 에이전트 34명이 추가됩니다.
+이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 37개와 전문 에이전트 34명이 추가됩니다.
 
 ### 불러오는 방법 두 가지
 
@@ -257,7 +257,8 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 | `oss-scout` | 새 오픈소스를 넣을지 평가할 때 |
 | `research-wiki` | 리포트를 내 PC, 구글 드라이브, Notion의 위키에 쌓고 찾을 때 |
 | `report-email` | 리포트를 Gmail로 받거나 보낼 때 |
-| `report-broadcast` | 완성된 리포트를 해설 영상(2D 슬라이드, 음성, 자막)으로 만들 때 |
+| `report-broadcast` | 완성된 리포트를 주식 방송 형식의 해설 영상으로 만들 때 |
+| `broadcast-music` | 해설 영상에 넣을 배경 음악을 찾아 라이선스와 함께 받을 때 |
 | `stock-data-connections` | 내 데이터 키를 연결할 때 |
 | `stock-bull-bear-review` | 오를 이유와 내릴 이유를 나란히 볼 때 |
 | `stock-valuation-scenarios` | 적정 가격을 세 가지 경우로 계산할 때 |
@@ -335,7 +336,9 @@ python3 harness/broadcast.py build 대본.script.json 해설.mp4
 
 - 화면은 주식 방송 형식의 2D 화면입니다. 위에 프로그램 이름과 기준일, 가운데에 제목·글머리표·표·막대·카드 장면, 아래에 한 줄 자막과 흐르는 시세 띠가 나옵니다. 상승은 빨강, 하락은 파랑으로 표시합니다. 시세 띠는 실시간이 아니라 리포트 기준일의 값입니다. 장면은 HTML로 그려 Chrome으로 캡처합니다.
 - 음성은 오픈소스 TTS [Supertonic](https://github.com/supertone-inc/supertonic)이 내 PC에서 만듭니다. 코드는 MIT, 음성 모델은 OpenRAIL-M 라이선스입니다. `install`이 별도 가상 환경에 설치하고(Python 3.10 이상), 첫 실행 때 모델 약 400MB를 내려받습니다. 저장소는 2026년 9월부터 보관(archived) 상태여서 앞으로 갱신되지 않을 수 있습니다.
-- 음성 서비스를 바꿀 수 있습니다. `--tts typecast` 또는 `--tts elevenlabs`를 붙이면 [Typecast](https://typecast.ai/docs)나 [ElevenLabs](https://elevenlabs.io/docs) API로 읽습니다. 본인 키를 환경 변수(`TYPECAST_API_KEY`와 `TYPECAST_VOICE_ID`, 또는 `ELEVENLABS_API_KEY`와 `ELEVENLABS_VOICE_ID`)로 지정해야 하고, 이때는 해설 문장이 그 서비스로 전송되며 요금이 듭니다. 두 서비스의 공식 문서대로 구현하고 가짜 응답으로 테스트했으며, 실제 계정으로 호출해 보지는 않았습니다.
+- 음성 서비스를 바꿀 수 있습니다. `--tts typecast` 또는 `--tts elevenlabs`를 붙이면 [Typecast](https://typecast.ai/docs)나 [ElevenLabs](https://elevenlabs.io/docs) API로 읽습니다. 본인 키를 환경 변수(`TYPECAST_API_KEY`와 `TYPECAST_VOICE_ID`, 또는 `ELEVENLABS_API_KEY`와 `ELEVENLABS_VOICE_ID`)로 지정해야 하고, 이때는 해설 문장이 그 서비스로 전송되며 요금이 듭니다. 두 서비스의 공식 문서대로 구현하고 가짜 응답으로 테스트했으며, Typecast는 실제 계정으로 10분 분량 영상을 만들어 확인했고, ElevenLabs는 실제 계정으로 호출해 보지 않았습니다.
+- 배경 음악을 넣을 수 있습니다(`broadcast-music` 스킬). `python3 harness/music.py search "breaking news"`가 [Openverse](https://openverse.org)에서 CC0, 퍼블릭 도메인, CC BY 곡만 찾고, `fetch`가 파일과 라이선스 기록을 함께 받습니다. `build --music 파일`로 넣으면 해설이 나올 때 음악이 작아지고, 표기가 필요한 곡은 마지막 장면에 표기가 들어갑니다. 라이선스 기록이 없는 음악은 거절합니다. 라이선스는 목록에 적힌 값이므로 원본 페이지에서 한 번 확인하세요.
+- 해설 음량은 장면마다 -16 LUFS로 맞춥니다.
 - 영상은 ffmpeg가 합칩니다. mp4와 함께 자막(`.vtt`), 표지(`.png`), 장면별 시간(`.manifest.json`)이 생깁니다. 10분 영상에 2~3분쯤 걸립니다.
 - 대본을 쓴 뒤에는 모델을 부르지 않아 다시 만들어도 토큰이 들지 않습니다.
 - 해설은 귀로 듣는 글이라 숫자와 영문을 한글로 풀어 써야 합니다. `check`가 읽기 어려운 표기를 알려 줍니다.
@@ -632,7 +635,8 @@ python3 service/launch.py
 | `.agents/skills/`, `.codex/agents/` | Codex용 스킬과 에이전트 |
 | `harness/desk.py` | 리포트 목록, 투자 논지·의견·일정 기록 |
 | `harness/mailer.py` | 리포트를 내 Gmail로 보내기 |
-| `harness/broadcast.py` | 리포트 해설 영상 만들기 (2D 슬라이드, 오픈소스 TTS, 자막) |
+| `harness/broadcast.py` | 리포트 해설 영상 만들기 (방송 형식 화면, TTS, 자막, 배경 음악) |
+| `harness/music.py` | 다시 써도 되는 배경 음악 찾기와 라이선스 기록 |
 | `harness/wiki.py` | 리서치 위키 만들기, 넣기, 찾기, 점검 |
 | `harness/quant.py` | 백테스트, 기술 지표, 비중, 순위, 위험 한도, 수량 계산 |
 | `harness/tax.py` | 한국 투자 세금 계산과 근거 조문 |
