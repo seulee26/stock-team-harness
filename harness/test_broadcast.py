@@ -81,7 +81,9 @@ class BroadcastTest(unittest.TestCase):
             self.assertEqual(json.loads((Path(folder) / "show.manifest.json").read_text(encoding="utf-8")), manifest)
         self.assertEqual((manifest["scenes"], manifest["seconds"]), (6, round(6 * (2.5 + broadcast.PAUSE), 1)))
         programs = [call[0] for call in calls]
-        self.assertEqual((programs.count("chrome"), programs.count("tts"), programs.count("ffprobe"), programs.count("ffmpeg")), (6, 6, 6, 7))
+        self.assertEqual((programs.count("chrome"), programs.count("tts"), programs.count("ffprobe"), programs.count("ffmpeg")), (7, 6, 6, 7))
+        self.assertTrue(any("overlay=x=" in part for call in calls for part in call))
+        self.assertIn("가나다", broadcast.tape_html(broadcast.template()))
         spoken = [call[2] for call in calls if call[0] == "tts"]
         self.assertEqual(spoken, [scene["narration"] for scene in broadcast.template()["scenes"]])
         self.assertIn("concat", calls[-1])
@@ -132,6 +134,20 @@ class BroadcastTest(unittest.TestCase):
         ready = broadcast.doctor({"TYPECAST_API_KEY": "example-key", "TYPECAST_VOICE_ID": "tc_0123456789"})["engines"]
         self.assertEqual((ready["typecast"]["ready"], ready["elevenlabs"]["ready"]), (True, False))
         self.assertNotIn("example-key", json.dumps(ready))
+
+    def test_broadcast_frame_has_program_caption_and_ticker_rules(self):
+        script = sample()
+        page = broadcast.scene_html(script, 2, "data:image/png;base64,AAAA")
+        for expected in ('class="badge">리서치 브리핑', 'class="caption">핵심 세 가지', 'class="presenter"', 'class="tape"'):
+            self.assertIn(expected, page)
+        for change in (lambda s: s["ticker"][0].update(tone="rocket"), lambda s: s["ticker"][0].pop("value"),
+                       lambda s: s.update(ticker=[{"label": "가", "value": "1"}] * 25)):
+            broken = json.loads(json.dumps(broadcast.template()))
+            change(broken)
+            with self.assertRaises(broadcast.BroadcastError):
+                broadcast.validate(broken)
+        with self.assertRaises(broadcast.BroadcastError):
+            broadcast.presenter_uri({"presenter": "missing.png"})
 
     def test_build_refuses_missing_tools_and_bad_output(self):
         script = sample()

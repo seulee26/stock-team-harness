@@ -12,6 +12,7 @@ one service.
 """
 
 import argparse
+from base64 import b64encode
 from html import escape
 import json
 import os
@@ -26,7 +27,8 @@ from urllib import error, request
 HOME = Path(os.environ.get("STOCK_HARNESS_BROADCAST_HOME") or Path.home() / ".local/share/stock-team/broadcast")
 TTS_PACKAGE = "supertonic"
 KINDS = ("title", "bullets", "table", "bars", "cards", "closing")
-TONES = ("neutral", "good", "warn", "bad")
+TONES = ("neutral", "good", "warn", "bad", "up", "down")
+TAPE_SPEED = 110
 ENGINES = {
     "supertonic": {"label": "Supertonic (내 PC, 오픈소스)", "external": False},
     "typecast": {"label": "Typecast API", "external": True, "key": "TYPECAST_API_KEY", "voice": "TYPECAST_VOICE_ID",
@@ -46,39 +48,52 @@ HARD_TO_READ = re.compile(r"[A-Za-z]{2,}|\d|[$%]")
 CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:1280px;height:720px;overflow:hidden}
-body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;
-background:#f6f8fb;color:#12202f;word-break:keep-all}
-.frame{position:absolute;inset:0;padding:54px 72px 80px;display:flex;flex-direction:column}
-.eyebrow{font-size:22px;font-weight:700;color:#1f5fbf;letter-spacing:.02em}
-h1{font-size:50px;line-height:1.25;font-weight:800;margin-top:10px}
-.sub{font-size:27px;line-height:1.5;color:#44566b;margin-top:14px}
-.body{flex:1;display:flex;flex-direction:column;justify-content:center;margin-top:20px}
-ul{list-style:none;display:flex;flex-direction:column;gap:18px}
-li{font-size:31px;line-height:1.45;padding-left:34px;position:relative}
-li:before{content:'';position:absolute;left:4px;top:17px;width:13px;height:13px;border-radius:50%;background:#1f5fbf}
-table{width:100%;border-collapse:collapse;font-size:25px}
-th{text-align:left;font-weight:700;color:#44566b;border-bottom:3px solid #12202f;padding:10px 12px}
-td{padding:13px 12px;border-bottom:1px solid #d5dde7}
+body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;color:#f4f7fb;word-break:keep-all;
+background:#0a1322 linear-gradient(180deg,#101d33 0%,#0a1322 60%,#070d18 100%)}
+body:before{content:'';position:absolute;inset:0;background-image:linear-gradient(#ffffff0a 1px,transparent 1px),
+linear-gradient(90deg,#ffffff0a 1px,transparent 1px);background-size:64px 64px}
+.top{position:absolute;left:0;right:0;top:0;height:56px;display:flex;align-items:center;background:#060b15;border-bottom:2px solid #e11d2e}
+.badge{height:100%;display:flex;align-items:center;padding:0 22px;background:#e11d2e;color:#fff;font-size:21px;font-weight:800;letter-spacing:.02em}
+.program{padding-left:18px;font-size:20px;font-weight:700;color:#dbe6f3;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clock{padding-right:24px;font-size:18px;color:#9fb3c8;font-variant-numeric:tabular-nums;white-space:nowrap}
+.frame{position:absolute;left:0;right:0;top:56px;bottom:108px;padding:26px 56px 18px;display:flex;flex-direction:column}
+h1{font-size:42px;line-height:1.25;font-weight:800;padding-left:18px;border-left:8px solid #e11d2e}
+.sub{font-size:23px;line-height:1.45;color:#9fb3c8;margin-top:10px;padding-left:26px}
+.body{flex:1;display:flex;flex-direction:column;justify-content:center;margin-top:14px;min-height:0}
+ul{list-style:none;display:flex;flex-direction:column;gap:15px}
+li{font-size:29px;line-height:1.42;padding-left:34px;position:relative}
+li:before{content:'';position:absolute;left:4px;top:15px;width:14px;height:14px;background:#ffd400}
+table{width:100%;border-collapse:collapse;font-size:24px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-weight:700;color:#ffd400;border-bottom:2px solid #ffd400;padding:9px 12px;background:#ffffff0a}
+td{padding:12px 12px;border-bottom:1px solid #24324a}
 td:first-child{font-weight:700}
-table.compact{font-size:22px}table.compact td{padding:8px 12px}table.compact th{padding:7px 12px}
-.bar{display:grid;grid-template-columns:270px 1fr 190px;align-items:center;gap:18px;margin:9px 0;font-size:26px}
-.bar .label{font-weight:700}.bar .track{height:30px;background:#e3e9f1;border-radius:6px;overflow:hidden}
-.bar .fill{height:100%;border-radius:6px}.bar .value{font-weight:700;text-align:right}
-.cards{display:grid;gap:18px}
-.card{background:#fff;border:1px solid #d5dde7;border-left:9px solid #8a99ab;border-radius:10px;padding:18px 22px}
-.card .label{font-size:24px;font-weight:700;color:#44566b}
-.card .value{font-size:36px;font-weight:800;margin-top:4px}
-.card .note{font-size:22px;line-height:1.4;color:#44566b;margin-top:6px}
-.fill.neutral{background:#5b7089}.fill.good{background:#18794e}.fill.warn{background:#b7791f}.fill.bad{background:#c0362c}
-.card.good{border-left-color:#18794e}.card.warn{border-left-color:#b7791f}.card.bad{border-left-color:#c0362c}
-.card.neutral{border-left-color:#5b7089}
-.note-line{font-size:22px;color:#44566b;margin-top:18px;line-height:1.45}
-.foot{position:absolute;left:72px;right:72px;bottom:26px;display:flex;justify-content:space-between;
-font-size:18px;color:#6b7c90;border-top:1px solid #d5dde7;padding-top:11px}
-.title .frame{background:#12202f;color:#fff;justify-content:center}
-.title h1{font-size:60px}.title .body{flex:none}.title .sub{color:#c6d3e2}.title .eyebrow{color:#8fb8ff}
-.title .foot{color:#9fb0c4;border-top-color:#33475c}
-.closing .frame{justify-content:center}
+table.compact{font-size:21px}table.compact td{padding:7px 12px}table.compact th{padding:6px 12px}
+.bar{display:grid;grid-template-columns:270px 1fr 170px;align-items:center;gap:18px;margin:7px 0;font-size:25px}
+.bar .label{font-weight:700}.bar .track{height:28px;background:#1b2740;overflow:hidden}
+.bar .fill{height:100%}.bar .value{font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+.fill.neutral{background:#64748b}.fill.good{background:#22c55e}.fill.warn{background:#f59e0b}.fill.bad{background:#ef4444}
+.fill.up{background:#ff4d4f}.fill.down{background:#3b82f6}
+.cards{display:grid;gap:14px}
+.card{background:#131c2e;border:1px solid #24324a;border-top:6px solid #64748b;padding:14px 18px}
+.card .label{font-size:21px;font-weight:700;color:#9fb3c8}
+.card .value{font-size:33px;font-weight:800;margin-top:3px}
+.card .note{font-size:20px;line-height:1.4;color:#c5d2e2;margin-top:5px}
+.card.good{border-top-color:#22c55e}.card.good .value{color:#4ade80}
+.card.warn{border-top-color:#f59e0b}.card.warn .value{color:#fbbf24}
+.card.bad{border-top-color:#ef4444}.card.bad .value{color:#f87171}
+.card.up{border-top-color:#ff4d4f}.card.up .value{color:#ff6b6d}
+.card.down{border-top-color:#3b82f6}.card.down .value{color:#60a5fa}
+.note-line{font-size:19px;color:#9fb3c8;margin-top:14px;line-height:1.4}
+.lower{position:absolute;left:0;right:0;bottom:44px;height:64px;display:flex;align-items:center;background:#f4f7fb;color:#0a1322}
+.chip{height:100%;display:flex;align-items:center;padding:0 20px;background:#ffd400;font-size:21px;font-weight:800}
+.caption{flex:1;padding:0 18px;font-size:25px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fine{padding-right:18px;font-size:15px;color:#44566b;white-space:nowrap}
+.lower.cast .fine{padding-right:150px}
+.presenter{position:absolute;right:22px;bottom:44px;width:122px;height:122px;border-radius:50%;background:#ffe3d8;border:4px solid #ffd400;overflow:hidden}
+.presenter img{width:118%;margin-left:-9%;display:block}
+.tape{position:absolute;left:0;right:0;bottom:0;height:44px;background:#03060c;border-top:2px solid #e11d2e}
+.title h1{font-size:64px;border-left-width:12px}.title .sub{font-size:28px}.title .body{flex:none}
+.title .frame,.closing .frame{justify-content:center}
 """
 
 
@@ -110,6 +125,11 @@ def validate(script):
         raise BroadcastError(f"scenes: 1~{MAX_SCENES}개의 장면이 필요합니다.")
     if script.get("voice", "F1") not in VOICES:
         raise BroadcastError("voice: " + ", ".join(VOICES) + " 중 하나여야 합니다.")
+    ticker = script.get("ticker") or []
+    if not isinstance(ticker, list) or len(ticker) > 24 or any(
+            not isinstance(item, dict) or not item.get("label") or not item.get("value")
+            or item.get("tone", "neutral") not in TONES for item in ticker):
+        raise BroadcastError(f"ticker: 24개 이하이고 항목마다 label과 value가 있어야 하며 tone은 {', '.join(TONES)} 중 하나여야 합니다.")
     for number, scene in enumerate(scenes, start=1):
         where = f"장면 {number}"
         if not isinstance(scene, dict) or scene.get("kind") not in KINDS:
@@ -189,18 +209,57 @@ def scene_body(scene):
     return "<ul>" + "".join(f"<li>{cell(item)}</li>" for item in scene.get("bullets") or []) + "</ul>"
 
 
-def scene_html(script, number):
+def presenter_uri(script, base=None):
+    """Inline an optional presenter picture so the slide stays one self-contained file."""
+    name = script.get("presenter")
+    if not name:
+        return None
+    path = Path(name) if Path(name).is_absolute() else Path(base or ".") / name
+    if path.suffix.lower() not in (".png", ".webp", ".jpg", ".jpeg") or not path.is_file() or path.stat().st_size > 2_000_000:
+        raise BroadcastError("presenter는 2MB 이하의 png, webp, jpg 파일이어야 합니다.")
+    kind = {"png": "png", "webp": "webp"}.get(path.suffix.lower()[1:], "jpeg")
+    return f"data:image/{kind};base64," + b64encode(path.read_bytes()).decode("ascii")
+
+
+def scene_html(script, number, presenter=None):
     scene = script["scenes"][number - 1]
     sub = f'<div class="sub">{cell(scene["sub"])}</div>' if scene.get("sub") else ""
     note = f'<div class="note-line">{cell(scene["note"])}</div>' if scene.get("note") else ""
-    eyebrow = scene.get("eyebrow") or script["title"]
+    caption = scene.get("caption") or scene.get("sub") or scene["heading"]
+    cast = f'<div class="presenter"><img src="{presenter}" alt=""></div>' if presenter else ""
     return (
         f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>{CSS}</style></head>'
-        f'<body class="{scene["kind"]}"><div class="frame"><div class="eyebrow">{cell(eyebrow)}</div>'
-        f'<h1>{cell(scene["heading"])}</h1>{sub}<div class="body">{scene_body(scene)}{note}</div></div>'
-        f'<div class="foot"><span>{cell(script["disclaimer"])}</span>'
-        f'<span>{cell(script["as_of"])} · {number} / {len(script["scenes"])}</span></div></body></html>'
+        f'<body class="{scene["kind"]}"><div class="top"><div class="badge">{cell(script.get("program") or "리서치 브리핑")}</div>'
+        f'<div class="program">{cell(scene.get("eyebrow") or script["title"])}</div>'
+        f'<div class="clock">{cell(script["as_of"])} · {number} / {len(script["scenes"])}</div></div>'
+        f'<div class="frame"><h1>{cell(scene["heading"])}</h1>{sub}<div class="body">{scene_body(scene)}{note}</div></div>'
+        f'<div class="lower{" cast" if presenter else ""}"><div class="chip">해설</div><div class="caption">{cell(caption)}</div>'
+        f'<div class="fine">{cell(script["disclaimer"])}</div></div>{cast}<div class="tape"></div></body></html>'
     )
+
+
+TAPE_CSS = """
+*{margin:0;padding:0}html,body{background:transparent;height:44px;overflow:hidden}
+body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;white-space:nowrap;
+font-size:22px;line-height:44px;color:#f4f7fb;font-variant-numeric:tabular-nums}
+span{margin-right:44px}b{font-weight:800;margin-right:10px}i{font-style:normal;font-weight:700;margin-left:10px}
+.up{color:#ff6b6d}.down{color:#60a5fa}.neutral{color:#9fb3c8}.good{color:#4ade80}.warn{color:#fbbf24}.bad{color:#f87171}
+"""
+
+
+def tape_html(script):
+    """One long transparent strip of quotes; ffmpeg slides it along the bottom band."""
+    items = "".join(
+        f'<span><b>{cell(item["label"])}</b>{cell(item["value"])}'
+        + (f'<i class="{item.get("tone", "neutral")}">{cell(item["change"])}</i>' if item.get("change") else "") + "</span>"
+        for item in script.get("ticker") or []
+    )
+    return f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>{TAPE_CSS}</style></head><body>{items}</body></html>'
+
+
+def tape_width(script):
+    letters = sum(len(str(item["label"])) + len(str(item["value"])) + len(str(item.get("change", ""))) for item in script["ticker"])
+    return min(letters * 22 + len(script["ticker"]) * 64, 10000)
 
 
 def clock(seconds):
@@ -333,7 +392,7 @@ def audio_seconds(path, *, execute=run):
 
 
 def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_id=None, execute=run, tools=None,
-          post=post_audio, environ=os.environ):
+          post=post_audio, environ=os.environ, base=None):
     if engine not in ENGINES:
         raise BroadcastError("tts는 " + ", ".join(ENGINES) + " 중 하나여야 합니다.")
     external = ENGINES[engine]["external"]
@@ -357,11 +416,19 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
     durations = []
     with TemporaryDirectory(prefix="broadcast-") as work:
         work = Path(work)
-        parts = []
+        parts, elapsed = [], 0.0
+        presenter = presenter_uri(script, base)
+        tape = None
+        if script.get("ticker"):
+            tape = work / "tape.png"
+            (work / "tape.html").write_text(tape_html(script), encoding="utf-8")
+            execute((tools["browser"], "--headless=new", "--disable-gpu", "--hide-scrollbars", "--default-background-color=00000000",
+                     f"--force-device-scale-factor={SCALE}", f"--window-size={tape_width(script)},44",
+                     f"--screenshot={tape}", (work / "tape.html").as_uri()))
         for number, scene in enumerate(script["scenes"], start=1):
             sound = ENGINES[engine].get("suffix", "wav")
             page, image, audio, part = (work / f"{number:02d}.{ext}" for ext in ("html", "png", sound, "mp4"))
-            page.write_text(scene_html(script, number), encoding="utf-8")
+            page.write_text(scene_html(script, number, presenter), encoding="utf-8")
             execute((tools["browser"], "--headless=new", "--disable-gpu", "--hide-scrollbars",
                      f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
                      f"--screenshot={image}", page.as_uri()))
@@ -373,10 +440,19 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
                          "--voice", voice, "--speed", f"{speed:.2f}"))
             seconds = audio_seconds(audio, execute=execute)
             durations.append(seconds)
-            execute(("ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "30", "-i", image, "-i", audio,
-                     "-vf", f"scale={int(WIDTH * SCALE)}:{int(HEIGHT * SCALE)},fade=t=in:st=0:d=0.35,format=yuv420p",
-                     "-af", f"apad=pad_dur={PAUSE}", "-t", f"{seconds + PAUSE:.3f}",
-                     "-c:v", "libx264", "-tune", "stillimage", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", part))
+            size = f"scale={int(WIDTH * SCALE)}:{int(HEIGHT * SCALE)},fade=t=in:st=0:d=0.35"
+            command = ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "30", "-i", image, "-i", audio]
+            if tape:
+                # The strip keeps moving across scene cuts because its position depends on total elapsed time.
+                command += ["-loop", "1", "-framerate", "30", "-i", tape, "-filter_complex",
+                            f"[0:v]{size}[bg];[bg][2:v]overlay=x='W-mod((t+{elapsed:.3f})*{int(TAPE_SPEED * SCALE)}\\,w+W)':y=H-h,format=yuv420p[v]",
+                            "-map", "[v]", "-map", "1:a", "-preset", "veryfast"]
+            else:
+                command += ["-vf", size + ",format=yuv420p", "-tune", "stillimage"]
+            command += ["-af", f"apad=pad_dur={PAUSE}", "-t", f"{seconds + PAUSE:.3f}",
+                        "-c:v", "libx264", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", part]
+            execute(command)
+            elapsed += seconds + PAUSE
             parts.append(part)
             if number == 1 and image.is_file():
                 shutil.copyfile(image, output.with_suffix(".png"))
@@ -399,7 +475,9 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
 
 def template():
     return {
-        "title": "리포트 제목", "as_of": "기준 2026년 1월 2일 종가", "language": "ko", "voice": "F1",
+        "title": "리포트 제목", "as_of": "기준 2026년 1월 2일 종가", "language": "ko", "voice": "F1", "program": "리서치 브리핑",
+        "ticker": [{"label": "가나다", "value": "$100.00", "change": "+1.2%", "tone": "up"},
+                   {"label": "라마바", "value": "$50.00", "change": "-0.8%", "tone": "down"}],
         "source_report": "reports/example.html",
         "disclaimer": "정보 제공용 해설이며 투자 권유가 아닙니다",
         "scenes": [
@@ -444,7 +522,8 @@ def main():
             result = {"valid": True, "scenes": len(script["scenes"]), "estimatedSeconds": estimate_seconds(script),
                       "readingWarnings": reading_warnings(script)}
         else:
-            result = build(load_script(args.script), args.output, voice=args.voice, speed=args.speed, engine=args.tts, voice_id=args.voice_id)
+            result = build(load_script(args.script), args.output, voice=args.voice, speed=args.speed, engine=args.tts,
+                           voice_id=args.voice_id, base=Path(args.script).resolve().parent)
     except BroadcastError as error:
         print(f"방송 제작 실패: {error}", file=sys.stderr)
         return 1
