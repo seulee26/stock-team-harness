@@ -5,6 +5,10 @@ The script is a JSON file a person or an agent writes from a finished report.
 Slides are drawn as plain HTML and captured with a local Chrome, narration is
 synthesised by a locally installed TTS command, and ffmpeg joins them. Nothing
 is sent to a model API, so a rebuild costs no tokens.
+
+Two paid voice services can replace the local TTS when the user sets their own
+key: Typecast and ElevenLabs. Only then is the narration text sent out, to that
+one service.
 """
 
 import argparse
@@ -17,11 +21,20 @@ import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+from urllib import error, request
 
 HOME = Path(os.environ.get("STOCK_HARNESS_BROADCAST_HOME") or Path.home() / ".local/share/stock-team/broadcast")
 TTS_PACKAGE = "supertonic"
 KINDS = ("title", "bullets", "table", "bars", "cards", "closing")
 TONES = ("neutral", "good", "warn", "bad")
+ENGINES = {
+    "supertonic": {"label": "Supertonic (내 PC, 오픈소스)", "external": False},
+    "typecast": {"label": "Typecast API", "external": True, "key": "TYPECAST_API_KEY", "voice": "TYPECAST_VOICE_ID",
+                 "model": ("TYPECAST_MODEL", "ssfm-v31"), "speed": (0.5, 2.0), "suffix": "wav"},
+    "elevenlabs": {"label": "ElevenLabs API", "external": True, "key": "ELEVENLABS_API_KEY", "voice": "ELEVENLABS_VOICE_ID",
+                   "model": ("ELEVENLABS_MODEL", "eleven_multilingual_v2"), "speed": (0.7, 1.2), "suffix": "mp3"},
+}
+VOICE_ID = re.compile(r"[A-Za-z0-9_-]{6,80}")
 VOICES = ("F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5")
 WIDTH, HEIGHT, SCALE = 1280, 720, 1.5
 PAUSE = 0.7
@@ -229,10 +242,65 @@ def tts_path():
     return str(local) if local.is_file() else shutil.which(TTS_PACKAGE)
 
 
-def doctor():
+class NoRedirect(request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def post_audio(url, headers, body):
+    """POST JSON to a fixed HTTPS host and return the audio bytes. The key never appears in errors."""
+    call = request.Request(url, data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                           headers={**headers, "Content-Type": "application/json"}, method="POST")
+    host = url.split("/")[2]
+    try:
+        with request.build_opener(NoRedirect).open(call, timeout=120) as response:
+            audio = response.read(60_000_000)
+    except error.HTTPError as failure:
+        try:
+            detail = json.loads(failure.read(2000).decode("utf-8", "ignore"))
+            detail = detail.get("message") or detail.get("detail") or ""
+            detail = detail.get("message", "") if isinstance(detail, dict) else str(detail)
+        except ValueError:
+            detail = ""
+        raise BroadcastError(f"{host} 응답 {failure.code}. {detail[:200]}".strip()) from None
+    except (error.URLError, TimeoutError, OSError):
+        raise BroadcastError(f"{host}에 연결하지 못했습니다.") from None
+    if len(audio) < 100:
+        raise BroadcastError(f"{host}가 음성을 돌려주지 않았습니다.")
+    return audio
+
+
+def cloud_voice(engine, voice_id=None, environ=os.environ):
+    """Return (credential, voice id, model) for a paid engine, read from the user's environment only."""
+    setting = ENGINES[engine]
+    credential = environ.get(setting["key"], "").strip()
+    voice_id = (voice_id or environ.get(setting["voice"], "")).strip()
+    if not credential:
+        raise BroadcastError(f"{setting['label']}를 쓰려면 환경 변수 {setting['key']}가 필요합니다. 키는 대화창에 붙여 넣지 말고 터미널에서 지정해 주세요.")
+    if not VOICE_ID.fullmatch(voice_id):
+        raise BroadcastError(f"목소리 ID를 --voice-id 또는 환경 변수 {setting['voice']}로 지정해 주세요.")
+    return credential, voice_id, environ.get(setting["model"][0], "").strip() or setting["model"][1]
+
+
+def cloud_speech(engine, text_value, speed, credential, voice_id, model, language="ko", *, post=post_audio):
+    if engine == "typecast":
+        return post("https://api.typecast.ai/v1/text-to-speech", {"X-API-KEY": credential}, {
+            "voice_id": voice_id, "text": text_value, "model": model,
+            "language": {"ko": "kor", "en": "eng", "ja": "jpn"}.get(language, language),
+            "output": {"audio_format": "wav", "audio_tempo": speed},
+        })
+    return post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128",
+                {"xi-api-key": credential}, {"text": text_value, "model_id": model, "voice_settings": {"speed": speed}})
+
+
+def doctor(environ=os.environ):
     tools = {"ffmpeg": shutil.which("ffmpeg"), "ffprobe": shutil.which("ffprobe"), "browser": browser_path(), "tts": tts_path()}
     return {
         "ready": all(tools.values()), "tools": tools,
+        "engines": {name: ({"ready": bool(tools["tts"])} if not setting["external"] else
+                           {"ready": bool(environ.get(setting["key"]) and environ.get(setting["voice"])),
+                            "needs": [setting["key"], setting["voice"]], "sendsNarrationTo": setting["label"]})
+                    for name, setting in ENGINES.items()},
         "ttsEngine": "Supertonic (코드 MIT, 음성 모델 OpenRAIL-M, 첫 실행 때 모델을 내려받음)",
         "install": {
             "tts": "python3 harness/broadcast.py install",
@@ -264,8 +332,18 @@ def audio_seconds(path, *, execute=run):
     return float(execute(("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path)).strip())
 
 
-def build(script, output, *, voice=None, speed=1.0, execute=run, tools=None):
-    tools = tools or doctor()["tools"]
+def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_id=None, execute=run, tools=None,
+          post=post_audio, environ=os.environ):
+    if engine not in ENGINES:
+        raise BroadcastError("tts는 " + ", ".join(ENGINES) + " 중 하나여야 합니다.")
+    external = ENGINES[engine]["external"]
+    tools = dict(tools or doctor()["tools"])
+    if external:
+        tools.pop("tts", None)
+        low, high = ENGINES[engine]["speed"]
+        if not low <= speed <= high:
+            raise BroadcastError(f"{ENGINES[engine]['label']}의 speed는 {low}~{high} 사이여야 합니다.")
+        credential, voice_id, model = cloud_voice(engine, voice_id, environ)
     missing = [name for name, path in tools.items() if not path]
     if missing:
         raise BroadcastError("준비되지 않은 도구: " + ", ".join(missing) + ". python3 harness/broadcast.py doctor 로 확인해 주세요.")
@@ -281,13 +359,18 @@ def build(script, output, *, voice=None, speed=1.0, execute=run, tools=None):
         work = Path(work)
         parts = []
         for number, scene in enumerate(script["scenes"], start=1):
-            page, image, audio, part = (work / f"{number:02d}.{ext}" for ext in ("html", "png", "wav", "mp4"))
+            sound = ENGINES[engine].get("suffix", "wav")
+            page, image, audio, part = (work / f"{number:02d}.{ext}" for ext in ("html", "png", sound, "mp4"))
             page.write_text(scene_html(script, number), encoding="utf-8")
             execute((tools["browser"], "--headless=new", "--disable-gpu", "--hide-scrollbars",
                      f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
                      f"--screenshot={image}", page.as_uri()))
-            execute((tools["tts"], "tts", scene["narration"], "-o", audio, "--lang", script.get("language", "ko"),
-                     "--voice", voice, "--speed", f"{speed:.2f}"))
+            if external:
+                audio.write_bytes(cloud_speech(engine, scene["narration"], speed, credential, voice_id, model,
+                                               script.get("language", "ko"), post=post))
+            else:
+                execute((tools["tts"], "tts", scene["narration"], "-o", audio, "--lang", script.get("language", "ko"),
+                         "--voice", voice, "--speed", f"{speed:.2f}"))
             seconds = audio_seconds(audio, execute=execute)
             durations.append(seconds)
             execute(("ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "30", "-i", image, "-i", audio,
@@ -305,8 +388,9 @@ def build(script, output, *, voice=None, speed=1.0, execute=run, tools=None):
     manifest = {
         "video": output.name, "subtitles": output.with_suffix(".vtt").name, "poster": output.with_suffix(".png").name,
         "title": script["title"], "asOf": script["as_of"], "scenes": len(durations),
-        "seconds": round(sum(durations) + PAUSE * len(durations), 1), "voice": voice, "speed": speed,
-        "ttsEngine": "Supertonic", "sourceReport": script.get("source_report"),
+        "seconds": round(sum(durations) + PAUSE * len(durations), 1), "voice": voice_id if external else voice, "speed": speed,
+        "ttsEngine": ENGINES[engine]["label"], "narrationSentTo": ENGINES[engine]["label"] if external else None,
+        "sourceReport": script.get("source_report"),
         "sceneSeconds": [round(value, 2) for value in durations],
     }
     output.with_suffix(".manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -344,6 +428,9 @@ def main():
     make.add_argument("output", help="만들 .mp4 경로. 같은 이름의 .vtt, .png, .manifest.json이 함께 생깁니다")
     make.add_argument("--voice", choices=VOICES)
     make.add_argument("--speed", type=float, default=1.0)
+    make.add_argument("--tts", choices=tuple(ENGINES), default=os.environ.get("STOCK_HARNESS_TTS_ENGINE") or "supertonic",
+                      help="음성 엔진. typecast와 elevenlabs는 해설 문장을 해당 서비스로 보내며 본인 키와 요금이 필요합니다")
+    make.add_argument("--voice-id", help="Typecast 또는 ElevenLabs의 목소리 ID")
     args = parser.parse_args()
     try:
         if args.command == "doctor":
@@ -357,7 +444,7 @@ def main():
             result = {"valid": True, "scenes": len(script["scenes"]), "estimatedSeconds": estimate_seconds(script),
                       "readingWarnings": reading_warnings(script)}
         else:
-            result = build(load_script(args.script), args.output, voice=args.voice, speed=args.speed)
+            result = build(load_script(args.script), args.output, voice=args.voice, speed=args.speed, engine=args.tts, voice_id=args.voice_id)
     except BroadcastError as error:
         print(f"방송 제작 실패: {error}", file=sys.stderr)
         return 1

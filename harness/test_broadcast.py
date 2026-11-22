@@ -86,6 +86,53 @@ class BroadcastTest(unittest.TestCase):
         self.assertEqual(spoken, [scene["narration"] for scene in broadcast.template()["scenes"]])
         self.assertIn("concat", calls[-1])
 
+    def test_paid_engines_send_only_narration_with_the_users_key(self):
+        tools = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe", "browser": "chrome", "tts": None}
+        cases = (
+            ("typecast", {"TYPECAST_API_KEY": "example-key", "TYPECAST_VOICE_ID": "tc_0123456789"}, "https://api.typecast.ai/v1/text-to-speech", "X-API-KEY"),
+            ("elevenlabs", {"ELEVENLABS_API_KEY": "example-key", "ELEVENLABS_VOICE_ID": "voice0123456789"},
+             "https://api.elevenlabs.io/v1/text-to-speech/voice0123456789?output_format=mp3_44100_128", "xi-api-key"),
+        )
+        for engine, environ, url, header in cases:
+            sent, programs = [], []
+
+            def post(target, headers, body):
+                sent.append((target, headers, body))
+                return b"audio" * 100
+
+            def execute(command):
+                programs.append(str(command[0]))
+                return "2.0\n" if str(command[0]) == "ffprobe" else ""
+
+            with TemporaryDirectory() as folder:
+                manifest = broadcast.build(sample(), Path(folder) / "show.mp4", engine=engine, execute=execute, tools=tools,
+                                           post=post, environ=environ)
+                saved = (Path(folder) / "show.manifest.json").read_text(encoding="utf-8")
+            self.assertEqual(len(sent), 6)
+            self.assertEqual((sent[0][0], sent[0][1]), (url, {header: "example-key"}))
+            self.assertEqual(sent[0][2].get("text"), broadcast.template()["scenes"][0]["narration"])
+            self.assertNotIn("tts", programs)
+            self.assertNotIn("example-key", saved)
+            self.assertEqual(manifest["narrationSentTo"], broadcast.ENGINES[engine]["label"])
+        self.assertEqual(sent[0][2]["voice_settings"], {"speed": 1.0})
+
+    def test_paid_engines_need_key_voice_and_valid_speed(self):
+        tools = {"ffmpeg": "x", "ffprobe": "x", "browser": "x", "tts": None}
+        cases = (
+            ("typecast", {}, 1.0), ("typecast", {"TYPECAST_API_KEY": "example-key"}, 1.0),
+            ("elevenlabs", {"ELEVENLABS_API_KEY": "example-key", "ELEVENLABS_VOICE_ID": "bad id!"}, 1.0),
+            ("elevenlabs", {"ELEVENLABS_API_KEY": "example-key", "ELEVENLABS_VOICE_ID": "voice0123456789"}, 1.4),
+            ("google", {}, 1.0),
+        )
+        for engine, environ, speed in cases:
+            with self.assertRaises(broadcast.BroadcastError) as caught:
+                broadcast.build(sample(), "show.mp4", engine=engine, speed=speed, tools=tools, environ=environ,
+                                post=lambda *arguments: self.fail("no request expected"))
+            self.assertNotIn("example-key", str(caught.exception))
+        ready = broadcast.doctor({"TYPECAST_API_KEY": "example-key", "TYPECAST_VOICE_ID": "tc_0123456789"})["engines"]
+        self.assertEqual((ready["typecast"]["ready"], ready["elevenlabs"]["ready"]), (True, False))
+        self.assertNotIn("example-key", json.dumps(ready))
+
     def test_build_refuses_missing_tools_and_bad_output(self):
         script = sample()
         with self.assertRaises(broadcast.BroadcastError):

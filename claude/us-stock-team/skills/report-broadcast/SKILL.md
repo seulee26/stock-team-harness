@@ -1,6 +1,6 @@
 ---
 name: report-broadcast
-description: 완성된 리포트를 초보자도 이해할 수 있는 해설 영상(2D 슬라이드, 오픈소스 TTS 음성, 자막)으로 만든다. "리포트 영상으로 만들어 줘", "방송으로 설명해 줘", "해설 영상", "유튜브용으로", "투자자에게 보여 줄 영상" 요청에 사용한다. 대본을 쓴 뒤에는 내 PC에서만 만들어 토큰이 들지 않는다.
+description: 완성된 리포트를 초보자도 이해할 수 있는 해설 영상(2D 슬라이드, 오픈소스 TTS 음성, 자막)으로 만든다. 원하면 Typecast나 ElevenLabs 음성으로 바꿀 수 있다. "리포트 영상으로 만들어 줘", "방송으로 설명해 줘", "해설 영상", "유튜브용으로", "투자자에게 보여 줄 영상" 요청에 사용한다. 대본을 쓴 뒤에는 내 PC에서만 만들어 토큰이 들지 않는다.
 ---
 
 # 리포트 해설 방송
@@ -17,6 +17,7 @@ description: 완성된 리포트를 초보자도 이해할 수 있는 해설 영
 | 길이 | 8~10분 (장면 12~15개) |
 | 시청자 | 주식을 처음 보는 사람 |
 | 목소리 | F1 (여성). F1~F5, M1~M5 중 선택 |
+| 음성 엔진 | 내 PC의 오픈소스 TTS. 원하면 Typecast나 ElevenLabs (본인 키, 유료) |
 | 받는 형식 | mp4, 자막(.vtt), 표지 이미지(.png) |
 
 ## 만드는 순서
@@ -47,6 +48,26 @@ python3 harness/broadcast.py build 대본.script.json 출력.mp4 --voice F1 --sp
 5. 화면을 확인한다. 장면마다 한 장씩 뽑아 글자가 잘리거나 겹치는지 본다. 문제가 있으면 대본의 화면 글을 줄이고 다시 만든다. 음성을 직접 들어 보지 못했으면 그렇게 밝히고 사용자에게 한 번 들어 보라고 권한다.
 
 전문 역할을 쓸 수 없는 환경에서는 현재 세션이 대본 작성과 점검을 직접 하고 독립 검토를 거치지 않았다고 밝힌다.
+
+## 목소리 서비스 바꾸기 (선택)
+
+기본은 내 PC에서 도는 오픈소스 TTS다. 사용자가 원하면 유료 음성 서비스인 Typecast나 ElevenLabs로 바꿀 수 있다. 사용자가 먼저 요청했을 때만 쓰고, 쓰기 전에 두 가지를 알린다: 해설 문장이 그 서비스로 전송된다는 것, 그 서비스의 요금(크레딧)이 든다는 것.
+
+키는 사용자가 자기 터미널에서 환경 변수로 지정한다. 대화창에 붙여 넣게 하지 않는다. 목소리 ID는 각 서비스의 목소리 목록에서 사용자가 고른다.
+
+```sh
+# Typecast
+export TYPECAST_API_KEY=<YOUR_API_KEY>
+export TYPECAST_VOICE_ID=<VOICE_ID>
+python3 harness/broadcast.py build 대본.script.json 출력.mp4 --tts typecast
+
+# ElevenLabs
+export ELEVENLABS_API_KEY=<YOUR_API_KEY>
+export ELEVENLABS_VOICE_ID=<VOICE_ID>
+python3 harness/broadcast.py build 대본.script.json 출력.mp4 --tts elevenlabs
+```
+
+`doctor`의 `engines`에서 어느 엔진이 준비됐는지 본다. 모델은 `TYPECAST_MODEL`(기본 ssfm-v31), `ELEVENLABS_MODEL`(기본 eleven_multilingual_v2)로 바꾼다. 속도는 Typecast 0.5~2.0, ElevenLabs 0.7~1.2다. 환경 변수가 이 세션에 보이지 않으면 사용자가 그 터미널에서 명령을 직접 실행하게 한다. 오류가 나면 오류 문장만 전하고 키를 다시 보여 달라고 하지 않는다. 다른 사람의 목소리를 복제한 목소리 ID는 본인이나 권리자의 동의가 있는 경우에만 쓴다.
 
 ## 지킬 것
 

@@ -335,6 +335,7 @@ python3 harness/broadcast.py build 대본.script.json 해설.mp4
 
 - 화면은 2D 슬라이드입니다. 제목, 글머리표, 표, 막대, 카드 여섯 가지 장면을 HTML로 그려 Chrome으로 캡처합니다.
 - 음성은 오픈소스 TTS [Supertonic](https://github.com/supertone-inc/supertonic)이 내 PC에서 만듭니다. 코드는 MIT, 음성 모델은 OpenRAIL-M 라이선스입니다. `install`이 별도 가상 환경에 설치하고(Python 3.10 이상), 첫 실행 때 모델 약 400MB를 내려받습니다. 저장소는 2026년 9월부터 보관(archived) 상태여서 앞으로 갱신되지 않을 수 있습니다.
+- 음성 서비스를 바꿀 수 있습니다. `--tts typecast` 또는 `--tts elevenlabs`를 붙이면 [Typecast](https://typecast.ai/docs)나 [ElevenLabs](https://elevenlabs.io/docs) API로 읽습니다. 본인 키를 환경 변수(`TYPECAST_API_KEY`와 `TYPECAST_VOICE_ID`, 또는 `ELEVENLABS_API_KEY`와 `ELEVENLABS_VOICE_ID`)로 지정해야 하고, 이때는 해설 문장이 그 서비스로 전송되며 요금이 듭니다. 두 서비스의 공식 문서대로 구현하고 가짜 응답으로 테스트했으며, 실제 계정으로 호출해 보지는 않았습니다.
 - 영상은 ffmpeg가 합칩니다. mp4와 함께 자막(`.vtt`), 표지(`.png`), 장면별 시간(`.manifest.json`)이 생깁니다. 10분 영상에 2~3분쯤 걸립니다.
 - 대본을 쓴 뒤에는 모델을 부르지 않아 다시 만들어도 토큰이 들지 않습니다.
 - 해설은 귀로 듣는 글이라 숫자와 영문을 한글로 풀어 써야 합니다. `check`가 읽기 어려운 표기를 알려 줍니다.
