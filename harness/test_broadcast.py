@@ -149,6 +149,57 @@ class BroadcastTest(unittest.TestCase):
         with self.assertRaises(broadcast.BroadcastError):
             broadcast.presenter_uri({"presenter": "missing.png"})
 
+    def test_interview_uses_each_speakers_voice_and_names_them(self):
+        script = broadcast.validate(broadcast.template("interview"))
+        self.assertEqual([(turn[0], turn[1], turn[3]) for turn in broadcast.turns(script)][:3],
+                         [(1, "anchor", broadcast.TURN_PAUSE), (1, "expert", broadcast.PAUSE), (2, "anchor", broadcast.TURN_PAUSE)])
+        page = broadcast.scene_html(script, 2, None, {}, "expert")
+        self.assertIn('class="chip">AI 애널리스트', page)
+        self.assertEqual(page.count('class="guest on"'), 1)
+        calls = []
+
+        def execute(command):
+            command = [str(part) for part in command]
+            calls.append(command)
+            return "2.0\n" if command[0] == "ffprobe" else ""
+
+        tools = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe", "browser": "chrome", "tts": "tts"}
+        with TemporaryDirectory() as folder:
+            manifest = broadcast.build(script, Path(folder) / "talk.mp4", execute=execute, tools=tools)
+            captions = (Path(folder) / "talk.vtt").read_text(encoding="utf-8")
+        voices = [call[call.index("--voice") + 1] for call in calls if call[0] == "tts"]
+        self.assertEqual(voices, ["F1", "M2", "F1", "M2", "F1", "M2", "F1"])
+        self.assertEqual((manifest["format"], manifest["speakers"], manifest["scenes"], len(manifest["sceneSeconds"])),
+                         ("interview", ["AI 앵커", "AI 애널리스트"], 3, 3))
+        self.assertIn("AI 앵커: 안녕하십니까.", captions)
+        self.assertIn("AI 애널리스트: 네, 결론은 한 가지입니다.", captions)
+        sent = []
+        with TemporaryDirectory() as folder:
+            script["speakers"]["expert"]["voice_id"] = "tc_expert0001"
+            broadcast.build(script, Path(folder) / "talk.mp4", engine="typecast", execute=execute, tools=tools,
+                            post=lambda url, headers, body: sent.append(body["voice_id"]) or b"audio" * 100,
+                            environ={"TYPECAST_API_KEY": "example-key", "TYPECAST_VOICE_ID": "tc_anchor0001"})
+        self.assertEqual(sent[:2], ["tc_anchor0001", "tc_expert0001"])
+
+    def test_interview_script_rules_and_options(self):
+        cases = (
+            lambda s: s["scenes"][0]["dialogue"][0].update(speaker="guest"),
+            lambda s: s["scenes"][0].update(narration="둘 다 쓰면 안 됩니다."),
+            lambda s: s["scenes"][0].update(dialogue=[]),
+            lambda s: s.update(speakers={"anchor": {"name": "AI 앵커"}}),
+            lambda s: s["speakers"]["expert"].update(voice="X1"),
+            lambda s: s.update(format="debate"),
+        )
+        for change in cases:
+            script = broadcast.template("interview")
+            change(script)
+            with self.assertRaises(broadcast.BroadcastError):
+                broadcast.validate(script)
+        choices = {choice["item"]: choice for choice in broadcast.options()["choices"]}
+        self.assertEqual(set(choices["진행 방식"]["options"]), {"anchor", "interview"})
+        self.assertEqual(set(choices["목소리"]["options"]), set(broadcast.ENGINES))
+        self.assertIn("배경 음악", choices)
+
     def test_build_refuses_missing_tools_and_bad_output(self):
         script = sample()
         with self.assertRaises(broadcast.BroadcastError):

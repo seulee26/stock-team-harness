@@ -42,6 +42,9 @@ VOICE_ID = re.compile(r"[A-Za-z0-9_-]{6,80}")
 VOICES = ("F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5")
 WIDTH, HEIGHT, SCALE = 1280, 720, 1.5
 PAUSE = 0.7
+TURN_PAUSE = 0.3
+MAX_TURN = 600
+FORMATS = {"anchor": "앵커 한 명이 전달", "interview": "앵커와 전문가의 대담"}
 MAX_NARRATION = 900
 MAX_SCENES = 40
 SENTENCE = re.compile(r"[^.!?。]+[.!?。]+|[^.!?。]+$")
@@ -93,6 +96,13 @@ table.compact{font-size:21px}table.compact td{padding:7px 12px}table.compact th{
 .lower.cast .fine{padding-right:150px}
 .presenter{position:absolute;right:22px;bottom:44px;width:122px;height:122px;border-radius:50%;background:#ffe3d8;border:4px solid #ffd400;overflow:hidden}
 .presenter img{width:118%;margin-left:-9%;display:block}
+.panel{position:absolute;right:20px;bottom:44px;display:flex;gap:12px;align-items:flex-end}
+.guest{width:112px;text-align:center;opacity:.55}
+.guest img,.guest span{display:block;width:104px;height:104px;margin:0 auto;border-radius:50%;background:#ffe3d8;border:4px solid #8a99ab;object-fit:cover;object-position:top}
+.guest span{line-height:96px;font-size:44px;font-weight:800;color:#0a1322}
+.guest b{display:block;margin-top:-14px;position:relative;padding:3px 0;font-size:15px;font-weight:800;color:#0a1322;background:#dbe6f3;border-radius:4px}
+.guest.on{opacity:1}.guest.on img,.guest.on span{border-color:#ffd400;width:116px;height:116px}.guest.on b{background:#ffd400}
+.lower.talk2 .fine{padding-right:268px}.lower.talk3 .fine{padding-right:392px}.lower.talk4 .fine{display:none}
 .tape{position:absolute;left:0;right:0;bottom:0;height:44px;background:#03060c;border-top:2px solid #e11d2e}
 .title h1{font-size:64px;border-left-width:12px}.title .sub{font-size:28px}.title .body{flex:none}
 .title .frame,.closing .frame{justify-content:center}
@@ -132,12 +142,39 @@ def validate(script):
             not isinstance(item, dict) or not item.get("label") or not item.get("value")
             or item.get("tone", "neutral") not in TONES for item in ticker):
         raise BroadcastError(f"ticker: 24개 이하이고 항목마다 label과 value가 있어야 하며 tone은 {', '.join(TONES)} 중 하나여야 합니다.")
+    if script.get("format", "anchor") not in FORMATS:
+        raise BroadcastError("format: " + ", ".join(FORMATS) + " 중 하나여야 합니다.")
+    speakers = script.get("speakers") or {}
+    if not isinstance(speakers, dict) or len(speakers) > 4:
+        raise BroadcastError("speakers: 출연자는 4명까지입니다.")
+    for key, person in speakers.items():
+        if not isinstance(person, dict):
+            raise BroadcastError(f"speakers.{key}: 이름과 목소리를 적어 주세요.")
+        person["name"] = text(person.get("name"), f"speakers.{key} name", 20)
+        if person.get("voice", "F1") not in VOICES:
+            raise BroadcastError(f"speakers.{key} voice: " + ", ".join(VOICES) + " 중 하나여야 합니다.")
+        if person.get("voice_id") and not VOICE_ID.fullmatch(str(person["voice_id"])):
+            raise BroadcastError(f"speakers.{key} voice_id의 형식이 올바르지 않습니다.")
+    if script.get("format") == "interview" and len(speakers) < 2:
+        raise BroadcastError("대담 형식은 speakers에 출연자 두 명 이상이 필요합니다.")
     for number, scene in enumerate(scenes, start=1):
         where = f"장면 {number}"
         if not isinstance(scene, dict) or scene.get("kind") not in KINDS:
             raise BroadcastError(f"{where}: kind는 {', '.join(KINDS)} 중 하나여야 합니다.")
         scene["heading"] = text(scene.get("heading"), f"{where} heading", 70)
-        scene["narration"] = text(scene.get("narration"), f"{where} narration", MAX_NARRATION)
+        dialogue = scene.get("dialogue")
+        if dialogue is not None:
+            if scene.get("narration") or not isinstance(dialogue, list) or not 1 <= len(dialogue) <= 8:
+                raise BroadcastError(f"{where}: narration과 dialogue 중 하나만 쓰고, dialogue는 1~8마디여야 합니다.")
+            for turn in dialogue:
+                if not isinstance(turn, dict) or turn.get("speaker") not in speakers:
+                    raise BroadcastError(f"{where}: dialogue의 speaker는 speakers에 있는 이름표여야 합니다.")
+                turn["text"] = text(turn.get("text"), f"{where} 대사", MAX_TURN)
+            scene["narration"] = " ".join(turn["text"] for turn in dialogue)
+            if len(scene["narration"]) > MAX_NARRATION * 2:
+                raise BroadcastError(f"{where}: 한 장면의 대화는 {MAX_NARRATION * 2}자 이내여야 합니다.")
+        else:
+            scene["narration"] = text(scene.get("narration"), f"{where} narration", MAX_NARRATION)
         kind = scene["kind"]
         if kind == "bullets" and not 1 <= len(scene.get("bullets") or []) <= 5:
             raise BroadcastError(f"{where}: bullets는 1~5줄이어야 합니다.")
@@ -176,6 +213,16 @@ def estimate_seconds(script, chars_per_second=6.5):
     return round(sum(len(scene["narration"]) / chars_per_second + PAUSE for scene in script["scenes"]))
 
 
+def turns(script):
+    """Flatten the script into spoken turns: (scene number, speaker key or None, text, pause after)."""
+    result = []
+    for number, scene in enumerate(script["scenes"], start=1):
+        lines = [(turn["speaker"], turn["text"]) for turn in scene["dialogue"]] if scene.get("dialogue") else [(None, scene["narration"])]
+        for index, (speaker, words) in enumerate(lines):
+            result.append((number, speaker, words, PAUSE if index == len(lines) - 1 else TURN_PAUSE))
+    return result
+
+
 def cell(value):
     return escape(str(value))
 
@@ -211,32 +258,50 @@ def scene_body(scene):
     return "<ul>" + "".join(f"<li>{cell(item)}</li>" for item in scene.get("bullets") or []) + "</ul>"
 
 
-def presenter_uri(script, base=None):
-    """Inline an optional presenter picture so the slide stays one self-contained file."""
-    name = script.get("presenter")
+def picture_uri(name, base=None):
+    """Inline a presenter picture so the slide stays one self-contained file."""
     if not name:
         return None
     path = Path(name) if Path(name).is_absolute() else Path(base or ".") / name
     if path.suffix.lower() not in (".png", ".webp", ".jpg", ".jpeg") or not path.is_file() or path.stat().st_size > 2_000_000:
-        raise BroadcastError("presenter는 2MB 이하의 png, webp, jpg 파일이어야 합니다.")
+        raise BroadcastError("진행자 그림은 2MB 이하의 png, webp, jpg 파일이어야 합니다.")
     kind = {"png": "png", "webp": "webp"}.get(path.suffix.lower()[1:], "jpeg")
     return f"data:image/{kind};base64," + b64encode(path.read_bytes()).decode("ascii")
 
 
-def scene_html(script, number, presenter=None):
+def presenter_uri(script, base=None):
+    return picture_uri(script.get("presenter"), base)
+
+
+def cast_pictures(script, base=None):
+    return {key: picture_uri(person.get("image"), base) for key, person in (script.get("speakers") or {}).items()}
+
+
+def scene_html(script, number, presenter=None, cast=None, active=None):
     scene = script["scenes"][number - 1]
     sub = f'<div class="sub">{cell(scene["sub"])}</div>' if scene.get("sub") else ""
     note = f'<div class="note-line">{cell(scene["note"])}</div>' if scene.get("note") else ""
     caption = scene.get("caption") or scene.get("sub") or scene["heading"]
-    cast = f'<div class="presenter"><img src="{presenter}" alt=""></div>' if presenter else ""
+    speakers = script.get("speakers") or {}
+    chip, people, lower = "해설", "", ""
+    if scene.get("dialogue") and speakers:
+        # A talk scene shows every speaker and lights up the one who is talking.
+        chip = speakers[active]["name"] if active in speakers else "대담"
+        people = '<div class="panel">' + "".join(
+            f'<div class="guest{" on" if key == active else ""}">'
+            + (f'<img src="{(cast or {}).get(key)}" alt="">' if (cast or {}).get(key) else f'<span>{cell(person["name"][:1])}</span>')
+            + f'<b>{cell(person["name"])}</b></div>' for key, person in speakers.items()) + "</div>"
+        lower = f" talk{len(speakers)}"
+    elif presenter:
+        people, lower = f'<div class="presenter"><img src="{presenter}" alt=""></div>', " cast"
     return (
         f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>{CSS}</style></head>'
         f'<body class="{scene["kind"]}"><div class="top"><div class="badge">{cell(script.get("program") or "리서치 브리핑")}</div>'
         f'<div class="program">{cell(scene.get("eyebrow") or script["title"])}</div>'
         f'<div class="clock">{cell(script["as_of"])} · {number} / {len(script["scenes"])}</div></div>'
         f'<div class="frame"><h1>{cell(scene["heading"])}</h1>{sub}<div class="body">{scene_body(scene)}{note}</div></div>'
-        f'<div class="lower{" cast" if presenter else ""}"><div class="chip">해설</div><div class="caption">{cell(caption)}</div>'
-        f'<div class="fine">{cell(script["disclaimer"])}</div></div>{cast}<div class="tape"></div></body></html>'
+        f'<div class="lower{lower}"><div class="chip">{cell(chip)}</div><div class="caption">{cell(caption)}</div>'
+        f'<div class="fine">{cell(script["disclaimer"])}</div></div>{people}<div class="tape"></div></body></html>'
     )
 
 
@@ -270,17 +335,19 @@ def clock(seconds):
 
 
 def subtitles(script, durations):
-    """Split each narration into sentences and share the scene's audio time by length."""
+    """Split each spoken turn into sentences and share its audio time by length. Talk turns carry the speaker's name."""
     lines, start = ["WEBVTT", ""], 0.0
-    for scene, duration in zip(script["scenes"], durations):
-        sentences = [part.strip() for part in SENTENCE.findall(scene["narration"]) if part.strip()]
+    speakers = script.get("speakers") or {}
+    for (_, speaker, words, pause), duration in zip(turns(script), durations):
+        sentences = [part.strip() for part in SENTENCE.findall(words) if part.strip()]
         total = sum(len(sentence) for sentence in sentences) or 1
         cursor = start
-        for sentence in sentences:
+        for index, sentence in enumerate(sentences):
             end = cursor + duration * len(sentence) / total
-            lines += [f"{clock(cursor)} --> {clock(end)}", sentence, ""]
+            label = f"{speakers[speaker]['name']}: " if speaker in speakers and index == 0 else ""
+            lines += [f"{clock(cursor)} --> {clock(end)}", label + sentence, ""]
             cursor = end
-        start += duration + PAUSE
+        start += duration + pause
     return "\n".join(lines)
 
 
@@ -461,25 +528,28 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
             execute((tools["browser"], "--headless=new", "--disable-gpu", "--hide-scrollbars", "--default-background-color=00000000",
                      f"--force-device-scale-factor={SCALE}", f"--window-size={tape_width(script)},44",
                      f"--screenshot={tape}", (work / "tape.html").as_uri()))
-        for number, scene in enumerate(script["scenes"], start=1):
-            sound = ENGINES[engine].get("suffix", "wav")
-            page, image, audio, part = (work / f"{number:02d}.{ext}" for ext in ("html", "png", sound, "mp4"))
-            page.write_text(scene_html(script, number, presenter), encoding="utf-8")
+        cast = cast_pictures(script, base)
+        speakers = script.get("speakers") or {}
+        spoken = turns(script)
+        sound = ENGINES[engine].get("suffix", "wav")
+        for index, (number, speaker, words, pause) in enumerate(spoken, start=1):
+            page, image, audio, part = (work / f"{index:03d}.{ext}" for ext in ("html", "png", sound, "mp4"))
+            page.write_text(scene_html(script, number, presenter, cast, speaker), encoding="utf-8")
             execute((tools["browser"], "--headless=new", "--disable-gpu", "--hide-scrollbars",
                      f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
                      f"--screenshot={image}", page.as_uri()))
+            person = speakers.get(speaker) or {}
             if external:
-                scenes = script["scenes"]
-                context = (scenes[number - 2]["narration"] if number > 1 else "",
-                           scenes[number]["narration"] if number < len(scenes) else "")
-                audio.write_bytes(cloud_speech(engine, scene["narration"], speed, credential, voice_id, model,
+                context = (spoken[index - 2][2] if index > 1 else "", spoken[index][2] if index < len(spoken) else "")
+                audio.write_bytes(cloud_speech(engine, words, speed, credential, person.get("voice_id") or voice_id, model,
                                                script.get("language", "ko"), post=post, context=context))
             else:
-                execute((tools["tts"], "tts", scene["narration"], "-o", audio, "--lang", script.get("language", "ko"),
-                         "--voice", voice, "--speed", f"{speed:.2f}"))
+                execute((tools["tts"], "tts", words, "-o", audio, "--lang", script.get("language", "ko"),
+                         "--voice", person.get("voice") or voice, "--speed", f"{speed:.2f}"))
             seconds = audio_seconds(audio, execute=execute)
             durations.append(seconds)
-            size = f"scale={int(WIDTH * SCALE)}:{int(HEIGHT * SCALE)},fade=t=in:st=0:d=0.35"
+            first = index == 1 or spoken[index - 2][0] != number
+            size = f"scale={int(WIDTH * SCALE)}:{int(HEIGHT * SCALE)}" + (",fade=t=in:st=0:d=0.35" if first else "")
             command = ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "30", "-i", image, "-i", audio]
             if tape:
                 # The strip keeps moving across scene cuts because its position depends on total elapsed time.
@@ -488,36 +558,75 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
                             "-map", "[v]", "-map", "1:a", "-preset", "veryfast"]
             else:
                 command += ["-vf", size + ",format=yuv420p", "-tune", "stillimage"]
-            command += ["-af", f"loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur={PAUSE}", "-t", f"{seconds + PAUSE:.3f}",
+            command += ["-af", f"loudnorm=I=-16:TP=-1.5:LRA=11,apad=pad_dur={pause}", "-t", f"{seconds + pause:.3f}",
                         "-c:v", "libx264", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", part]
             execute(command)
-            elapsed += seconds + PAUSE
+            elapsed += seconds + pause
             parts.append(part)
-            if number == 1 and image.is_file():
+            if index == 1 and image.is_file():
                 shutil.copyfile(image, output.with_suffix(".png"))
         listing = work / "parts.txt"
         listing.write_text("".join(f"file '{part.name}'\n" for part in parts), encoding="utf-8")
         execute(("ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing,
                  "-c", "copy", "-movflags", "+faststart", output))
-    total = sum(durations) + PAUSE * len(durations)
+    pauses = [item[3] for item in turns(script)]
+    total = sum(durations) + sum(pauses)
+    per_scene = {}
+    for (number, _, _, pause), seconds in zip(turns(script), durations):
+        per_scene[number] = per_scene.get(number, 0) + seconds + pause
     if track:
         mix_music(output, music, music_volume, total, execute=execute)
     output.with_suffix(".vtt").write_text(subtitles(script, durations), encoding="utf-8")
     manifest = {
         "video": output.name, "subtitles": output.with_suffix(".vtt").name, "poster": output.with_suffix(".png").name,
-        "title": script["title"], "asOf": script["as_of"], "scenes": len(durations),
-        "seconds": round(sum(durations) + PAUSE * len(durations), 1), "voice": voice_id if external else voice, "speed": speed,
+        "title": script["title"], "asOf": script["as_of"], "scenes": len(script["scenes"]),
+        "format": script.get("format", "anchor"), "speakers": [person["name"] for person in (script.get("speakers") or {}).values()],
+        "seconds": round(total, 1), "voice": voice_id if external else voice, "speed": speed,
         "ttsEngine": ENGINES[engine]["label"], "narrationSentTo": ENGINES[engine]["label"] if external else None,
         "sourceReport": script.get("source_report"),
         "music": ({key: track.get(key) for key in ("title", "creator", "license", "source", "credit")} | {"volume": music_volume}
                   if track else None),
-        "sceneSeconds": [round(value, 2) for value in durations],
+        "sceneSeconds": [round(per_scene[number] - PAUSE, 2) for number in sorted(per_scene)],
     }
     output.with_suffix(".manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return manifest
 
 
-def template():
+def options():
+    """The choices a person should be shown every time before a video is made."""
+    return {
+        "ask": "영상을 만들기 전에 아래 선택지를 항상 보여 주고 고르게 합니다. 고르지 않은 항목은 default를 쓰고 무엇을 썼는지 알립니다.",
+        "choices": [
+            {"item": "진행 방식", "default": "anchor", "options": FORMATS},
+            {"item": "길이", "default": "8~10분", "options": ["3분 요약", "8~10분", "15분 심층"]},
+            {"item": "목소리", "default": "supertonic", "options": {name: setting["label"] + (" · 본인 키와 요금 필요, 해설 문장이 전송됨" if setting["external"] else " · 무료") for name, setting in ENGINES.items()}},
+            {"item": "진행 속도", "default": "1.0", "options": ["1.0 차분하게", "1.08 뉴스처럼 빠르게"]},
+            {"item": "배경 음악", "default": "없음", "options": ["없음", "뉴스풍 음악을 찾아서 넣기 (broadcast-music)", "내가 가진 음악 넣기"]},
+            {"item": "시청자", "default": "주식을 처음 보는 사람", "options": ["주식을 처음 보는 사람", "투자 경험이 있는 사람"]},
+        ],
+    }
+
+
+def template(kind="anchor"):
+    if kind == "interview":
+        return {
+            "title": "리포트 제목", "as_of": "기준 2026년 1월 2일 종가", "language": "ko", "format": "interview", "program": "리서치 대담",
+            "source_report": "reports/example.html", "disclaimer": "정보 제공용 해설이며 투자 권유가 아닙니다",
+            "speakers": {"anchor": {"name": "AI 앵커", "voice": "F1"}, "expert": {"name": "AI 애널리스트", "voice": "M2"}},
+            "ticker": [{"label": "가나다", "value": "$100.00", "change": "+1.2%", "tone": "up"}],
+            "scenes": [
+                {"kind": "title", "heading": "한 줄 결론", "dialogue": [
+                    {"speaker": "anchor", "text": "안녕하십니까. 오늘 리포트의 결론부터 여쭙겠습니다."},
+                    {"speaker": "expert", "text": "네, 결론은 한 가지입니다."}]},
+                {"kind": "bullets", "heading": "핵심 세 가지", "bullets": ["첫째", "둘째", "셋째"], "dialogue": [
+                    {"speaker": "anchor", "text": "근거는 무엇입니까."},
+                    {"speaker": "expert", "text": "세 가지입니다."},
+                    {"speaker": "anchor", "text": "위험은 없습니까."},
+                    {"speaker": "expert", "text": "있습니다. 그 점도 말씀드리겠습니다."}]},
+                {"kind": "closing", "heading": "기억할 것", "bullets": ["투자 판단과 책임은 본인에게 있습니다"], "dialogue": [
+                    {"speaker": "anchor", "text": "정보 제공을 위한 대담이며 투자 권유가 아닙니다. 시청해 주셔서 감사합니다."}]},
+            ],
+        }
     return {
         "title": "리포트 제목", "as_of": "기준 2026년 1월 2일 종가", "language": "ko", "voice": "F1", "program": "리서치 브리핑",
         "ticker": [{"label": "가나다", "value": "$100.00", "change": "+1.2%", "tone": "up"},
@@ -542,7 +651,9 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="필요한 도구가 준비됐는지 확인")
     commands.add_parser("install", help="TTS를 별도 가상 환경에 설치")
-    commands.add_parser("template", help="대본 JSON 예시 출력")
+    sample = commands.add_parser("template", help="대본 JSON 예시 출력")
+    sample.add_argument("--format", choices=tuple(FORMATS), default="anchor", help="anchor는 앵커 단독, interview는 앵커와 전문가 대담")
+    commands.add_parser("options", help="영상을 만들기 전에 사용자에게 보여 줄 선택지")
     check = commands.add_parser("check", help="대본을 검사하고 길이를 추정")
     check.add_argument("script")
     make = commands.add_parser("build", help="대본으로 mp4, 자막, 표지 이미지를 생성")
@@ -563,10 +674,13 @@ def main():
         elif args.command == "install":
             result = install()
         elif args.command == "template":
-            result = template()
+            result = template(args.format)
+        elif args.command == "options":
+            result = options()
         elif args.command == "check":
             script = load_script(args.script)
-            result = {"valid": True, "scenes": len(script["scenes"]), "estimatedSeconds": estimate_seconds(script),
+            result = {"valid": True, "format": script.get("format", "anchor"), "scenes": len(script["scenes"]), "turns": len(turns(script)),
+                      "estimatedSeconds": estimate_seconds(script),
                       "readingWarnings": reading_warnings(script)}
         else:
             result = build(load_script(args.script), args.output, voice=args.voice, speed=args.speed, engine=args.tts,

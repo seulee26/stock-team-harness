@@ -139,7 +139,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     U(["사용자"]) --> AI["Claude Code · us-stock-team 플러그인<br/>또는 Codex · 하네스 폴더 열기"]
-    AI --> SK["스킬 37개"]
+    AI --> SK["스킬 38개"]
     SK --> AG["전문 에이전트 34명"]
     SK --> TX["harness/tax.py<br/>한국 투자 세금 계산"]
     SK --> WK["harness/wiki.py<br/>리서치 위키 넣기 · 찾기 · 점검"]
@@ -171,7 +171,7 @@ flowchart TD
 
 ## Claude Code 플러그인으로 쓰기
 
-이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 37개와 전문 에이전트 34명이 추가됩니다.
+이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 38개와 전문 에이전트 34명이 추가됩니다.
 
 ### 불러오는 방법 두 가지
 
@@ -258,6 +258,7 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 | `research-wiki` | 리포트를 내 PC, 구글 드라이브, Notion의 위키에 쌓고 찾을 때 |
 | `report-email` | 리포트를 Gmail로 받거나 보낼 때 |
 | `report-broadcast` | 완성된 리포트를 주식 방송 형식의 해설 영상으로 만들 때 |
+| `broadcast-interview` | 해설 영상을 앵커와 전문가가 묻고 답하는 대담 형식으로 만들 때 |
 | `broadcast-music` | 해설 영상에 넣을 배경 음악을 찾아 라이선스와 함께 받을 때 |
 | `stock-data-connections` | 내 데이터 키를 연결할 때 |
 | `stock-bull-bear-review` | 오를 이유와 내릴 이유를 나란히 볼 때 |
@@ -334,6 +335,8 @@ python3 harness/broadcast.py check 대본.script.json
 python3 harness/broadcast.py build 대본.script.json 해설.mp4
 ```
 
+- 진행 방식은 두 가지입니다. 앵커 한 명이 전달하는 방식과, 앵커가 묻고 전문가가 답하는 대담 방식(`broadcast-interview` 스킬)입니다. 대담은 출연자마다 다른 목소리를 쓰고 화면에서 말하는 사람이 밝게 표시됩니다. 대본 예시는 `python3 harness/broadcast.py template --format interview`로 봅니다.
+- 영상을 요청하면 만들기 전에 진행 방식, 길이, 목소리, 속도, 배경 음악 선택지를 항상 보여 줍니다(`python3 harness/broadcast.py options`).
 - 화면은 주식 방송 형식의 2D 화면입니다. 위에 프로그램 이름과 기준일, 가운데에 제목·글머리표·표·막대·카드 장면, 아래에 한 줄 자막과 흐르는 시세 띠가 나옵니다. 상승은 빨강, 하락은 파랑으로 표시합니다. 시세 띠는 실시간이 아니라 리포트 기준일의 값입니다. 장면은 HTML로 그려 Chrome으로 캡처합니다.
 - 음성은 오픈소스 TTS [Supertonic](https://github.com/supertone-inc/supertonic)이 내 PC에서 만듭니다. 코드는 MIT, 음성 모델은 OpenRAIL-M 라이선스입니다. `install`이 별도 가상 환경에 설치하고(Python 3.10 이상), 첫 실행 때 모델 약 400MB를 내려받습니다. 저장소는 2026년 9월부터 보관(archived) 상태여서 앞으로 갱신되지 않을 수 있습니다.
 - 음성 서비스를 바꿀 수 있습니다. `--tts typecast` 또는 `--tts elevenlabs`를 붙이면 [Typecast](https://typecast.ai/docs)나 [ElevenLabs](https://elevenlabs.io/docs) API로 읽습니다. 본인 키를 환경 변수(`TYPECAST_API_KEY`와 `TYPECAST_VOICE_ID`, 또는 `ELEVENLABS_API_KEY`와 `ELEVENLABS_VOICE_ID`)로 지정해야 하고, 이때는 해설 문장이 그 서비스로 전송되며 요금이 듭니다. 두 서비스의 공식 문서대로 구현하고 가짜 응답으로 테스트했으며, Typecast는 실제 계정으로 10분 분량 영상을 만들어 확인했고, ElevenLabs는 실제 계정으로 호출해 보지 않았습니다.
