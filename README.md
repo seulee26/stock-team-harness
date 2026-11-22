@@ -3,7 +3,7 @@
 AI에게 주식을 물어보면, 증권사 리서치센터와 헤지펀드처럼 여러 팀이 나눠 조사하고 서로 검증한 뒤 **주식을 몰라도 읽을 수 있는 한국어 리포트**로 정리해 주는 도구입니다. Claude Code와 Codex에서 씁니다.
 
 - "삼성전자 지금 사도 될까?", "엔비디아 분석해 줘"처럼 평소 말투로 물어보면 됩니다.
-- 전략, 뉴스, 미국 주식, 국내 주식, 산업, ETF, 선물·매크로, 퀀트, 리스크, 세무, 편집·준법, 문서·위키까지 AI 32명이 일합니다.
+- 전략, 뉴스, 미국 주식, 국내 주식, 산업, ETF, 선물·매크로, 퀀트, 리스크, 세무, 편집·준법, 문서·위키, 방송까지 AI 34명이 일합니다.
 - 주식 양도세, 배당, 증여세, 절세 계좌 같은 한국 투자 세금을 법령 근거와 함께 계산해 줍니다.
 - GitHub 오픈소스 28개를 공개 기준 다섯 항목으로 채점해, 6개는 명령으로 직접 부르고 4개는 계산법 일부를 직접 구현했습니다.
 - 만든 리포트는 구글 드라이브나 내 PC의 리서치 위키에 쌓아 두고 다시 찾아볼 수 있습니다.
@@ -112,6 +112,7 @@ flowchart TD
     PM --> ED["편집 · 준법<br/>쉬운 말 · 숫자 대조 · 고지 점검"]
     ED --> O(["리포트 15종<br/>HTML · PDF"])
     O --> WK["문서 · 위키<br/>분류해 쌓기 · 찾기 · 점검"]
+    O --> BC["방송<br/>대본 · 해설 영상"]
 ```
 
 | 조직 | 에이전트 | 맡은 일 |
@@ -128,6 +129,7 @@ flowchart TD
 | 오픈소스 심사 | `oss-evaluator` | 새 도구를 넣기 전에 같은 기준으로 채점 |
 | 편집·준법 | `editor`, `compliance` | 초보자가 읽을 수 있게 다듬기, 표현·고지·개인정보 점검 |
 | 문서·위키 | `wiki-librarian`, `wiki-auditor` | 리포트를 위키에 분류해 넣기, 오래되거나 어긋난 문서 점검 |
+| 방송 | `broadcast-writer`, `broadcast-director` | 완성된 리포트를 해설 영상 대본으로 옮기기, 리포트와 대조해 영상 만들기 |
 | 운영 | `stock-sale-fee` | 팔 때 드는 수수료와 세금 |
 
 ### 하네스 구성
@@ -137,8 +139,8 @@ flowchart TD
 ```mermaid
 flowchart TD
     U(["사용자"]) --> AI["Claude Code · us-stock-team 플러그인<br/>또는 Codex · 하네스 폴더 열기"]
-    AI --> SK["스킬 35개"]
-    SK --> AG["전문 에이전트 32명"]
+    AI --> SK["스킬 36개"]
+    SK --> AG["전문 에이전트 34명"]
     SK --> TX["harness/tax.py<br/>한국 투자 세금 계산"]
     SK --> WK["harness/wiki.py<br/>리서치 위키 넣기 · 찾기 · 점검"]
     SK --> DK["harness/desk.py<br/>리포트 목록 · 논지 · 의견 정산 · 일정"]
@@ -169,7 +171,7 @@ flowchart TD
 
 ## Claude Code 플러그인으로 쓰기
 
-이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 35개와 전문 에이전트 32명이 추가됩니다.
+이 저장소의 `claude/us-stock-team` 폴더가 Claude Code 플러그인입니다. 불러오면 스킬 36개와 전문 에이전트 34명이 추가됩니다.
 
 ### 불러오는 방법 두 가지
 
@@ -255,6 +257,7 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 | `oss-scout` | 새 오픈소스를 넣을지 평가할 때 |
 | `research-wiki` | 리포트를 구글 드라이브나 내 PC의 위키에 쌓고 찾을 때 |
 | `report-email` | 리포트를 Gmail로 받거나 보낼 때 |
+| `report-broadcast` | 완성된 리포트를 해설 영상(2D 슬라이드, 음성, 자막)으로 만들 때 |
 | `stock-data-connections` | 내 데이터 키를 연결할 때 |
 | `stock-bull-bear-review` | 오를 이유와 내릴 이유를 나란히 볼 때 |
 | `stock-valuation-scenarios` | 적정 가격을 세 가지 경우로 계산할 때 |
@@ -311,6 +314,25 @@ python3 harness/mailer.py send report.html report.pdf --subject "[기업 분석]
 ```
 
 앱 비밀번호는 내 터미널에만 넣습니다. 보유 내역이 들어간 포트폴리오 점검 리포트는 본인 주소로만 보내세요.
+
+### 리포트를 해설 영상으로 만들기
+
+완성된 리포트를 초보자도 따라올 수 있는 해설 영상으로 만듭니다. "방금 리포트를 영상으로 설명해 줘"라고 하면 방송 작가 역할이 대본을 쓰고, 방송 PD 역할이 리포트와 숫자를 대조한 뒤 영상을 만듭니다(`report-broadcast` 스킬).
+
+```sh
+python3 harness/broadcast.py doctor
+python3.12 harness/broadcast.py install
+python3 harness/broadcast.py template
+python3 harness/broadcast.py check 대본.script.json
+python3 harness/broadcast.py build 대본.script.json 해설.mp4
+```
+
+- 화면은 2D 슬라이드입니다. 제목, 글머리표, 표, 막대, 카드 여섯 가지 장면을 HTML로 그려 Chrome으로 캡처합니다.
+- 음성은 오픈소스 TTS [Supertonic](https://github.com/supertone-inc/supertonic)이 내 PC에서 만듭니다. 코드는 MIT, 음성 모델은 OpenRAIL-M 라이선스입니다. `install`이 별도 가상 환경에 설치하고(Python 3.10 이상), 첫 실행 때 모델 약 400MB를 내려받습니다. 저장소는 2026년 9월부터 보관(archived) 상태여서 앞으로 갱신되지 않을 수 있습니다.
+- 영상은 ffmpeg가 합칩니다. mp4와 함께 자막(`.vtt`), 표지(`.png`), 장면별 시간(`.manifest.json`)이 생깁니다. 10분 영상에 2~3분쯤 걸립니다.
+- 대본을 쓴 뒤에는 모델을 부르지 않아 다시 만들어도 토큰이 들지 않습니다.
+- 해설은 귀로 듣는 글이라 숫자와 영문을 한글로 풀어 써야 합니다. `check`가 읽기 어려운 표기를 알려 줍니다.
+- 영상의 숫자와 판정은 리포트와 같아야 하고, 모든 화면에 투자 권유가 아니라는 고지가 들어갑니다.
 
 ### 생각을 기록하고 되짚기
 
@@ -603,6 +625,7 @@ python3 service/launch.py
 | `.agents/skills/`, `.codex/agents/` | Codex용 스킬과 에이전트 |
 | `harness/desk.py` | 리포트 목록, 투자 논지·의견·일정 기록 |
 | `harness/mailer.py` | 리포트를 내 Gmail로 보내기 |
+| `harness/broadcast.py` | 리포트 해설 영상 만들기 (2D 슬라이드, 오픈소스 TTS, 자막) |
 | `harness/wiki.py` | 리서치 위키 만들기, 넣기, 찾기, 점검 |
 | `harness/quant.py` | 백테스트, 기술 지표, 비중, 순위, 위험 한도, 수량 계산 |
 | `harness/tax.py` | 한국 투자 세금 계산과 근거 조문 |

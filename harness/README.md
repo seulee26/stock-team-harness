@@ -193,6 +193,20 @@ python3 harness/connectors.py evaluate owner/repo --license MIT --live-orders no
 - `bars`는 사용자가 설치한 yfinance나 FinanceDataReader를 별도 프로세스로 불러 `date,close` CSV를 만듭니다. 다른 파이썬에 설치했다면 `STOCK_HARNESS_DATA_PYTHON`으로 경로를 지정합니다.
 - `catalog`는 오픈소스 28개의 점수, 판정, 반영 범위를 보여 줍니다. `evaluate`는 새 후보를 같은 기준으로 채점합니다.
 
+## 리포트 해설 영상
+
+```bash
+python3 harness/broadcast.py doctor
+python3.12 harness/broadcast.py install
+python3 harness/broadcast.py check 대본.script.json
+python3 harness/broadcast.py build 대본.script.json 해설.mp4 --voice F1
+```
+
+- `build`는 대본 JSON의 장면을 2D 슬라이드로 그려 Chrome으로 캡처하고, 오픈소스 TTS Supertonic으로 해설을 읽은 뒤 ffmpeg로 합칩니다. mp4, 자막(`.vtt`), 표지(`.png`), `.manifest.json`이 생깁니다.
+- `install`은 TTS를 별도 가상 환경에 설치합니다(Python 3.10 이상). 코드는 MIT, 음성 모델은 OpenRAIL-M이며 첫 실행 때 모델을 내려받습니다. 다른 위치의 실행 파일은 `STOCK_HARNESS_TTS`로 지정합니다.
+- `check`는 형식과 예상 길이, 소리 내어 읽기 어려운 표기(영문, 숫자, 기호)를 알려 줍니다. `template`은 대본 예시를 출력합니다.
+- 모델 API를 부르지 않습니다. 계좌 정보가 든 리포트는 영상으로 만들지 않습니다.
+
 ## 한국 투자 세금
 
 `tax.py`는 `tax-rules-kr.json`의 규칙으로 계산합니다. 규칙마다 근거 조문과 확인 수준이 있고, 확인한 지 여섯 달이 넘거나 해가 바뀌면 경고를 붙입니다. 일반 정보이며 세무 자문이 아닙니다.

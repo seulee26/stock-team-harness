@@ -80,6 +80,8 @@
     thead th { background: var(--fill); color: var(--muted); font-size: .84rem; font-weight: 600; white-space: nowrap; }
     tbody th { color: var(--ink); font-weight: 650; }
     td { font-variant-numeric: tabular-nums; }
+    table:has(thead th:nth-child(7)) { font-size: .82rem; }
+    table:has(thead th:nth-child(7)) th, table:has(thead th:nth-child(7)) td { padding-left: 9px; padding-right: 9px; }
 
     .refs { display: inline; margin-inline-start: .3em; font-size: .7em; white-space: nowrap; vertical-align: super; line-height: 0; }
     .refs a { color: var(--blue-ink); font-weight: 700; }
@@ -114,6 +116,7 @@
       .metric-note { grid-column: 1 / -1; margin-top: 4px; }
       th, td { padding: 10px 12px; }
       td .measure { white-space: normal; }
+      td:last-child:not(:nth-child(-n+3)) { min-width: 13em; }
     }
 
     @media print {

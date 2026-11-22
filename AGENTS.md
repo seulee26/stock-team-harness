@@ -9,6 +9,7 @@
 - 세금 질문(주식 양도·배당, 증여·상속, 절세 계좌)에는 `$kr-tax-desk`를 적용하고 `$stock-tax-kr`, `$gift-tax-kr`, `$tax-saving-accounts`로 넘긴다. 수치는 `harness/tax.py rules`의 규칙과 근거 조문을 쓰고, 규칙 확인일과 세무 자문이 아니라는 점을 밝힌다.
 - ETF의 구조와 비교에는 `$etf-research`를, 새 오픈소스를 넣을지 평가할 때는 `$oss-scout`를 적용한다. 오픈소스를 반영한 범위를 부풀려 말하지 않는다.
 - 리포트를 메일로 보내 달라는 요청에는 `$report-email`을 적용한다. 받는 사람, 제목, 첨부를 보여 주고 사용자가 확인한 뒤에만 보낸다.
+- 리포트를 영상으로 설명해 달라는 요청에는 `$report-broadcast`를 적용한다. 방송 작가(`broadcast_writer`)가 대본을 쓰고 방송 PD(`broadcast_director`)가 리포트와 대조한 뒤 `harness/broadcast.py`로 2D 슬라이드 영상을 만든다. 영상을 외부에 올리는 일은 사용자가 요청하고 확인한 뒤에만 한다.
 - 여러 시장에 걸친 아이디어처럼 팀 전체의 심사가 필요하면 `$hedge-fund-desk`로 투자위원회를 연다. 보유 종목 전체 점검은 `$portfolio-review`를 쓴다.
 - 데이터 연결(에이전트 스토어, OpenDART, FRED)을 묻거나 설정하려면 `$stock-data-connections`를 적용한다. 키는 사용자가 자기 터미널에만 넣는다.
 - 네 가지 연동 도구를 쓰거나 상태를 점검하려면 `$stock-harness-integrations`를 적용한다. 작업에 따라 `$stock-source-evidence`, `$stock-bull-bear-review`, `$stock-earnings-review`, `$stock-valuation-scenarios`, `$stock-paper-portfolio`, `$stock-toss-readonly`를 선택한다.
