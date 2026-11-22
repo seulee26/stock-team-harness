@@ -12,7 +12,8 @@ one service.
 """
 
 import argparse
-from base64 import b64encode
+from base64 import b64decode, b64encode
+from hashlib import sha256
 from html import escape
 import json
 import os
@@ -45,6 +46,21 @@ PAUSE = 0.7
 TURN_PAUSE = 0.3
 MAX_TURN = 600
 FORMATS = {"anchor": "앵커 한 명이 전달", "interview": "앵커와 전문가의 대담"}
+STYLES = {
+    "board": {"label": "방송 보드 · 그림 없이 숫자와 표 중심 (무료)", "prompt": None},
+    "illustration": {
+        "label": "2D 일러스트 · 장면마다 그림 한 장 (이미지 API 필요)", "background": "opaque",
+        "prompt": "Flat editorial vector illustration for a financial news broadcast, bold simple shapes, deep navy background, "
+                  "accents in signal red, bright yellow and cobalt blue, subtle grain, wide composition with the subject centred.",
+    },
+    "3d": {
+        "label": "3D 오브젝트 · 장면마다 입체 그림 한 장 (이미지 API 필요)", "background": "transparent",
+        "prompt": "Soft 3D clay toy style object render, matte clay and glossy cobalt blue glass, coral and yellow accents, "
+                  "soft top-left studio light, rounded friendly shapes, single object group centred, fully transparent background.",
+    },
+}
+ART_RULES = " No text, no letters, no numbers, no logos, no brand marks, no real people."
+IMAGE_LAYOUTS = ("side", "corner", "full")
 MAX_NARRATION = 900
 MAX_SCENES = 40
 SENTENCE = re.compile(r"[^.!?。]+[.!?。]+|[^.!?。]+$")
@@ -68,6 +84,7 @@ h1{font-size:42px;line-height:1.25;font-weight:800;padding-left:18px;border-left
 ul{list-style:none;display:flex;flex-direction:column;gap:15px}
 li{font-size:29px;line-height:1.42;padding-left:34px;position:relative}
 li:before{content:'';position:absolute;left:4px;top:15px;width:14px;height:14px;background:#ffd400}
+.wait{visibility:hidden}
 table{width:100%;border-collapse:collapse;font-size:24px;font-variant-numeric:tabular-nums}
 th{text-align:left;font-weight:700;color:#ffd400;border-bottom:2px solid #ffd400;padding:9px 12px;background:#ffffff0a}
 td{padding:12px 12px;border-bottom:1px solid #24324a}
@@ -104,6 +121,19 @@ table.compact{font-size:21px}table.compact td{padding:7px 12px}table.compact th{
 .guest.on{opacity:1}.guest.on img,.guest.on span{border-color:#ffd400;width:116px;height:116px}.guest.on b{background:#ffd400}
 .lower.talk2 .fine{padding-right:268px}.lower.talk3 .fine{padding-right:392px}.lower.talk4 .fine{display:none}
 .tape{position:absolute;left:0;right:0;bottom:0;height:44px;background:#03060c;border-top:2px solid #e11d2e}
+.cols{flex:1;min-height:0;display:grid;grid-template-columns:1.5fr 1fr;gap:30px;align-items:center;margin-top:14px}
+.cols .body{margin-top:0;height:100%}.cols li{font-size:26px}.cols .card .value{font-size:28px}
+.art{height:100%;max-height:392px;border-radius:20px;overflow:hidden;border:1px solid #2b3b57;
+background:radial-gradient(circle at 35% 30%,#22365a 0%,#131c2e 70%);box-shadow:0 18px 40px #0008}
+.art img{width:100%;height:100%;object-fit:cover;display:block}.art.clear img{object-fit:contain}
+.art.corner{position:absolute;right:56px;top:14px;width:214px;height:142px;max-height:none;border-radius:14px}
+.frame.corner h1,.frame.corner .sub{margin-right:240px}
+.backdrop{position:absolute;inset:56px 0 108px 0;overflow:hidden}
+.backdrop img{position:absolute;right:0;top:0;height:100%;width:62%;object-fit:cover}
+.backdrop.clear img{object-fit:contain;right:4%;width:46%}
+.backdrop:after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,#0a1322 0%,#0a1322 36%,#0a132299 58%,#0a132200 100%)}
+.backdrop.clear:after{background:none}
+.frame.full h1,.frame.full .sub,.frame.full .body{max-width:50%}
 .title h1{font-size:64px;border-left-width:12px}.title .sub{font-size:28px}.title .body{flex:none}
 .title .frame,.closing .frame{justify-content:center}
 """
@@ -142,6 +172,8 @@ def validate(script):
             not isinstance(item, dict) or not item.get("label") or not item.get("value")
             or item.get("tone", "neutral") not in TONES for item in ticker):
         raise BroadcastError(f"ticker: 24개 이하이고 항목마다 label과 value가 있어야 하며 tone은 {', '.join(TONES)} 중 하나여야 합니다.")
+    if script.get("style", "board") not in STYLES:
+        raise BroadcastError("style: " + ", ".join(STYLES) + " 중 하나여야 합니다.")
     if script.get("format", "anchor") not in FORMATS:
         raise BroadcastError("format: " + ", ".join(FORMATS) + " 중 하나여야 합니다.")
     speakers = script.get("speakers") or {}
@@ -227,35 +259,58 @@ def cell(value):
     return escape(str(value))
 
 
-def scene_body(scene):
+def reveal_count(scene):
+    """How many items a scene can bring in one by one."""
     kind = scene["kind"]
-    if kind == "bullets":
-        return "<ul>" + "".join(f"<li>{cell(item)}</li>" for item in scene["bullets"]) + "</ul>"
+    if kind == "table":
+        return len(scene["table"]["rows"])
+    if kind == "bars":
+        return len(scene["bars"])
+    if kind == "cards":
+        return len(scene["cards"])
+    return len(scene.get("bullets") or [])
+
+
+def scene_body(scene, shown=None):
+    """Draw the scene. Items past `shown` keep their place but stay invisible, so the layout never jumps."""
+    kind = scene["kind"]
+
+    def wait(index):
+        return " wait" if shown is not None and index >= shown else ""
+
     if kind == "table":
         table = scene["table"]
         head = "".join(f"<th>{cell(column)}</th>" for column in table["columns"])
-        rows = "".join("<tr>" + "".join(f"<td>{cell(item)}</td>" for item in row) + "</tr>" for row in table["rows"])
+        rows = "".join(f'<tr class="{wait(index).strip()}">' + "".join(f"<td>{cell(item)}</td>" for item in row) + "</tr>"
+                       for index, row in enumerate(table["rows"]))
         compact = ' class="compact"' if len(table["rows"]) > 5 else ""
         return f"<table{compact}><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>"
     if kind == "bars":
         top = max(abs(bar["value"]) for bar in scene["bars"]) or 1
         return "".join(
-            f'<div class="bar"><div class="label">{cell(bar["label"])}</div><div class="track">'
+            f'<div class="bar{wait(index)}"><div class="label">{cell(bar["label"])}</div><div class="track">'
             f'<div class="fill {bar.get("tone", "neutral")}" style="width:{abs(bar["value"]) / top * 100:.1f}%"></div></div>'
             f'<div class="value">{cell(bar.get("display", bar["value"]))}</div></div>'
-            for bar in scene["bars"]
+            for index, bar in enumerate(scene["bars"])
         )
     if kind == "cards":
         cards = scene["cards"]
         columns = 1 if len(cards) == 1 else 2 if len(cards) in (2, 4) else 3
         items = "".join(
-            f'<div class="card {card.get("tone", "neutral")}"><div class="label">{cell(card["label"])}</div>'
+            f'<div class="card {card.get("tone", "neutral")}{wait(index)}"><div class="label">{cell(card["label"])}</div>'
             f'<div class="value">{cell(card["value"])}</div>'
             + (f'<div class="note">{cell(card["note"])}</div>' if card.get("note") else "") + "</div>"
-            for card in cards
+            for index, card in enumerate(cards)
         )
         return f'<div class="cards" style="grid-template-columns:repeat({columns},1fr)">{items}</div>'
-    return "<ul>" + "".join(f"<li>{cell(item)}</li>" for item in scene.get("bullets") or []) + "</ul>"
+    return "<ul>" + "".join(f'<li class="{wait(index).strip()}">{cell(item)}</li>'
+                            for index, item in enumerate(scene.get("bullets") or [])) + "</ul>"
+
+
+def image_layout(scene):
+    if scene.get("image_layout") in IMAGE_LAYOUTS:
+        return scene["image_layout"]
+    return {"title": "full", "closing": "full", "table": "corner", "bars": "corner"}.get(scene["kind"], "side")
 
 
 def picture_uri(name, base=None):
@@ -263,8 +318,8 @@ def picture_uri(name, base=None):
     if not name:
         return None
     path = Path(name) if Path(name).is_absolute() else Path(base or ".") / name
-    if path.suffix.lower() not in (".png", ".webp", ".jpg", ".jpeg") or not path.is_file() or path.stat().st_size > 2_000_000:
-        raise BroadcastError("진행자 그림은 2MB 이하의 png, webp, jpg 파일이어야 합니다.")
+    if path.suffix.lower() not in (".png", ".webp", ".jpg", ".jpeg") or not path.is_file() or path.stat().st_size > 8_000_000:
+        raise BroadcastError(f"그림은 8MB 이하의 png, webp, jpg 파일이어야 합니다: {name}")
     kind = {"png": "png", "webp": "webp"}.get(path.suffix.lower()[1:], "jpeg")
     return f"data:image/{kind};base64," + b64encode(path.read_bytes()).decode("ascii")
 
@@ -277,7 +332,7 @@ def cast_pictures(script, base=None):
     return {key: picture_uri(person.get("image"), base) for key, person in (script.get("speakers") or {}).items()}
 
 
-def scene_html(script, number, presenter=None, cast=None, active=None):
+def scene_html(script, number, presenter=None, cast=None, active=None, shown=None, art=None):
     scene = script["scenes"][number - 1]
     sub = f'<div class="sub">{cell(scene["sub"])}</div>' if scene.get("sub") else ""
     note = f'<div class="note-line">{cell(scene["note"])}</div>' if scene.get("note") else ""
@@ -294,15 +349,46 @@ def scene_html(script, number, presenter=None, cast=None, active=None):
         lower = f" talk{len(speakers)}"
     elif presenter:
         people, lower = f'<div class="presenter"><img src="{presenter}" alt=""></div>', " cast"
+    body = f'<div class="body">{scene_body(scene, shown)}{note}</div>'
+    layout, backdrop, clear = "", "", " clear" if script.get("style") == "3d" else ""
+    if art:
+        layout = image_layout(scene)
+        picture = f'<img src="{art}" alt="">'
+        if layout == "full":
+            backdrop = f'<div class="backdrop{clear}">{picture}</div>'
+        elif layout == "corner":
+            body = f'<div class="art corner{clear}">{picture}</div>' + body
+        else:
+            body = f'<div class="cols">{body}<div class="art{clear}">{picture}</div></div>'
     return (
         f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>{CSS}</style></head>'
         f'<body class="{scene["kind"]}"><div class="top"><div class="badge">{cell(script.get("program") or "리서치 브리핑")}</div>'
         f'<div class="program">{cell(scene.get("eyebrow") or script["title"])}</div>'
-        f'<div class="clock">{cell(script["as_of"])} · {number} / {len(script["scenes"])}</div></div>'
-        f'<div class="frame"><h1>{cell(scene["heading"])}</h1>{sub}<div class="body">{scene_body(scene)}{note}</div></div>'
+        f'<div class="clock">{cell(script["as_of"])} · {number} / {len(script["scenes"])}</div></div>{backdrop}'
+        f'<div class="frame {layout}"><h1>{cell(scene["heading"])}</h1>{sub}{body}</div>'
         f'<div class="lower{lower}"><div class="chip">{cell(chip)}</div><div class="caption">{cell(caption)}</div>'
         f'<div class="fine">{cell(script["disclaimer"])}</div></div>{people}<div class="tape"></div></body></html>'
     )
+
+
+def reveal_plan(script):
+    """For every spoken turn, the item counts to show one after another while it plays."""
+    plan, spoken = [], turns(script)
+    for index, (number, _, _, _) in enumerate(spoken):
+        scene = script["scenes"][number - 1]
+        total = reveal_count(scene)
+        scene_turns = [position for position, turn in enumerate(spoken) if turn[0] == number]
+        if total <= 1 or script.get("reveal") is False:
+            plan.append([None])
+        elif len(scene_turns) == 1:
+            plan.append(list(range(1, total + 1)))
+        else:
+            # In a talk the list grows as the conversation moves on; the first turn only opens the scene.
+            place = scene_turns.index(index)
+            before = round(total * place / len(scene_turns))
+            after = round(total * (place + 1) / len(scene_turns))
+            plan.append(list(range(before + 1, after + 1)) or [before])
+    return plan
 
 
 TAPE_CSS = """
@@ -398,6 +484,67 @@ def post_audio(url, headers, body):
     return audio
 
 
+def post_json(url, headers, body):
+    call = request.Request(url, data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                           headers={**headers, "Content-Type": "application/json"}, method="POST")
+    host = url.split("/")[2]
+    try:
+        with request.build_opener(NoRedirect).open(call, timeout=300) as response:
+            return json.loads(response.read(80_000_000).decode("utf-8"))
+    except error.HTTPError as failure:
+        try:
+            detail = (json.loads(failure.read(4000).decode("utf-8", "ignore")).get("error") or {}).get("message", "")
+        except ValueError:
+            detail = ""
+        raise BroadcastError(f"{host} 응답 {failure.code}. {str(detail)[:200]}".strip()) from None
+    except (error.URLError, TimeoutError, OSError, ValueError):
+        raise BroadcastError(f"{host}에 연결하지 못했습니다.") from None
+
+
+def illustrate(script_path, style, *, post=post_json, environ=os.environ, redo=False):
+    """Draw one picture per scene from its `art` line with the user's image API key, and note the files in the script."""
+    if style not in STYLES or not STYLES[style]["prompt"]:
+        raise BroadcastError("그림을 그리는 화면 스타일은 " + ", ".join(name for name, item in STYLES.items() if item["prompt"]) + " 입니다.")
+    credential = environ.get("OPENAI_API_KEY", "").strip()
+    if not credential:
+        raise BroadcastError("그림을 그리려면 환경 변수 OPENAI_API_KEY가 필요합니다. 키는 대화창에 붙여 넣지 말고 터미널에서 지정해 주세요. "
+                             "키가 없으면 board 스타일을 쓰거나 장면의 image에 직접 그림 파일을 적어 주세요.")
+    script_path = Path(script_path)
+    script = load_script(script_path)
+    folder = script_path.with_name(script_path.name.split(".")[0] + ".art")
+    folder.mkdir(parents=True, exist_ok=True)
+    model = environ.get("STOCK_HARNESS_IMAGE_MODEL", "").strip() or "gpt-image-2.6-flare"
+    quality = environ.get("STOCK_HARNESS_IMAGE_QUALITY", "").strip() or "medium"
+    drawn, kept, skipped = [], [], []
+    for number, scene in enumerate(script["scenes"], start=1):
+        target = folder / f"{style}-{number:02d}.webp"
+        if not scene.get("art"):
+            skipped.append(number)
+            continue
+        if target.is_file() and not redo:
+            kept.append(number)
+        else:
+            subject = text(scene["art"], f"장면 {number} art", 400)
+            reply = post("https://api.openai.com/v1/images/generations", {"Authorization": "Bearer " + credential}, {
+                "model": model, "prompt": f"{STYLES[style]['prompt']} Subject: {subject}.{ART_RULES}", "size": "1536x1024",
+                "background": STYLES[style]["background"], "output_format": "webp", "quality": quality,
+            })
+            try:
+                target.write_bytes(b64decode(reply["data"][0]["b64_json"]))
+            except (KeyError, IndexError, TypeError, ValueError):
+                raise BroadcastError(f"장면 {number}의 그림을 받지 못했습니다.") from None
+            drawn.append(number)
+        scene["image"] = f"{folder.name}/{target.name}"
+    script["style"] = style
+    for scene in script["scenes"]:
+        if scene.get("dialogue"):
+            scene.pop("narration", None)
+    script_path.write_text(json.dumps(script, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {"style": style, "model": model, "drawn": drawn, "kept": kept, "scenesWithoutArt": skipped, "folder": str(folder),
+            "promptsSentTo": "OpenAI 이미지 API (장면의 art 문장만 전송)",
+            "next": "그림을 열어 글자나 로고, 실제 인물처럼 보이는 것이 없는지 확인한 뒤 build로 영상을 만듭니다."}
+
+
 def cloud_voice(engine, voice_id=None, environ=os.environ):
     """Return (credential, voice id, model) for a paid engine, read from the user's environment only."""
     setting = ENGINES[engine]
@@ -458,6 +605,20 @@ def install(python=sys.executable, *, execute=run):
     return {"installed": TTS_PACKAGE, "command": str(venv / "bin" / TTS_PACKAGE)}
 
 
+def cached_speech(key_parts, make, cache=None):
+    """Paid speech is kept by what was said and how, so a rebuild for new pictures does not pay again."""
+    if cache is None:
+        return make()
+    name = sha256(json.dumps(key_parts, ensure_ascii=False).encode("utf-8")).hexdigest()
+    path = Path(cache) / name
+    if path.is_file() and path.stat().st_size > 100:
+        return path.read_bytes()
+    audio = make()
+    Path(cache).mkdir(parents=True, exist_ok=True)
+    path.write_bytes(audio)
+    return audio
+
+
 def audio_seconds(path, *, execute=run):
     return float(execute(("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path)).strip())
 
@@ -480,7 +641,7 @@ def mix_music(video, track, volume, seconds, *, execute=run):
 
 
 def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_id=None, execute=run, tools=None,
-          post=post_audio, environ=os.environ, base=None, music=None, music_volume=0.14, music_credit=None):
+          post=post_audio, environ=os.environ, base=None, music=None, music_volume=0.14, music_credit=None, cache=None):
     if engine not in ENGINES:
         raise BroadcastError("tts는 " + ", ".join(ENGINES) + " 중 하나여야 합니다.")
     external = ENGINES[engine]["external"]
@@ -532,25 +693,42 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
         speakers = script.get("speakers") or {}
         spoken = turns(script)
         sound = ENGINES[engine].get("suffix", "wav")
+        plan = reveal_plan(script)
+        pictures = {number: picture_uri(scene.get("image"), base) for number, scene in enumerate(script["scenes"], start=1)}
         for index, (number, speaker, words, pause) in enumerate(spoken, start=1):
-            page, image, audio, part = (work / f"{index:03d}.{ext}" for ext in ("html", "png", sound, "mp4"))
-            page.write_text(scene_html(script, number, presenter, cast, speaker), encoding="utf-8")
-            execute((tools["browser"], "--headless=new", "--disable-gpu", "--hide-scrollbars",
-                     f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
-                     f"--screenshot={image}", page.as_uri()))
+            audio, part = (work / f"{index:03d}.{ext}" for ext in (sound, "mp4"))
+            stills = []
+            for step, shown in enumerate(plan[index - 1]):
+                page, image = (work / f"{index:03d}-{step}.{ext}" for ext in ("html", "png"))
+                page.write_text(scene_html(script, number, presenter, cast, speaker, shown, pictures[number]), encoding="utf-8")
+                execute((tools["browser"], "--headless=new", "--disable-gpu", "--hide-scrollbars",
+                         f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
+                         f"--screenshot={image}", page.as_uri()))
+                stills.append(image)
             person = speakers.get(speaker) or {}
             if external:
                 context = (spoken[index - 2][2] if index > 1 else "", spoken[index][2] if index < len(spoken) else "")
-                audio.write_bytes(cloud_speech(engine, words, speed, credential, person.get("voice_id") or voice_id, model,
-                                               script.get("language", "ko"), post=post, context=context))
+                speaking = person.get("voice_id") or voice_id
+                audio.write_bytes(cached_speech(
+                    [engine, speaking, model, speed, script.get("language", "ko"), words, context],
+                    lambda: cloud_speech(engine, words, speed, credential, speaking, model, script.get("language", "ko"),
+                                         post=post, context=context), cache))
             else:
                 execute((tools["tts"], "tts", words, "-o", audio, "--lang", script.get("language", "ko"),
                          "--voice", person.get("voice") or voice, "--speed", f"{speed:.2f}"))
             seconds = audio_seconds(audio, execute=execute)
             durations.append(seconds)
             first = index == 1 or spoken[index - 2][0] != number
-            size = f"scale={int(WIDTH * SCALE)}:{int(HEIGHT * SCALE)}" + (",fade=t=in:st=0:d=0.35" if first else "")
-            command = ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "30", "-i", image, "-i", audio]
+            size = f"fps=30,scale={int(WIDTH * SCALE)}:{int(HEIGHT * SCALE)}" + (",fade=t=in:st=0:d=0.35" if first else "")
+            if len(stills) == 1:
+                command = ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "30", "-i", stills[0], "-i", audio]
+            else:
+                # Items come in one by one while the turn is spoken; the last still stays through the pause.
+                each = seconds / len(stills)
+                order = work / f"{index:03d}.txt"
+                order.write_text("".join(f"file '{still.name}'\nduration {each + (pause if still is stills[-1] else 0):.3f}\n"
+                                         for still in stills) + f"file '{stills[-1].name}'\n", encoding="utf-8")
+                command = ["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", order, "-i", audio]
             if tape:
                 # The strip keeps moving across scene cuts because its position depends on total elapsed time.
                 command += ["-loop", "1", "-framerate", "30", "-i", tape, "-filter_complex",
@@ -563,8 +741,8 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
             execute(command)
             elapsed += seconds + pause
             parts.append(part)
-            if index == 1 and image.is_file():
-                shutil.copyfile(image, output.with_suffix(".png"))
+            if index == 1 and stills[-1].is_file():
+                shutil.copyfile(stills[-1], output.with_suffix(".png"))
         listing = work / "parts.txt"
         listing.write_text("".join(f"file '{part.name}'\n" for part in parts), encoding="utf-8")
         execute(("ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing,
@@ -580,7 +758,7 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
     manifest = {
         "video": output.name, "subtitles": output.with_suffix(".vtt").name, "poster": output.with_suffix(".png").name,
         "title": script["title"], "asOf": script["as_of"], "scenes": len(script["scenes"]),
-        "format": script.get("format", "anchor"), "speakers": [person["name"] for person in (script.get("speakers") or {}).values()],
+        "format": script.get("format", "anchor"), "style": script.get("style", "board"), "speakers": [person["name"] for person in (script.get("speakers") or {}).values()],
         "seconds": round(total, 1), "voice": voice_id if external else voice, "speed": speed,
         "ttsEngine": ENGINES[engine]["label"], "narrationSentTo": ENGINES[engine]["label"] if external else None,
         "sourceReport": script.get("source_report"),
@@ -598,6 +776,7 @@ def options():
         "ask": "영상을 만들기 전에 아래 선택지를 항상 보여 주고 고르게 합니다. 고르지 않은 항목은 default를 쓰고 무엇을 썼는지 알립니다.",
         "choices": [
             {"item": "진행 방식", "default": "anchor", "options": FORMATS},
+            {"item": "화면 스타일", "default": "board", "options": {name: item["label"] for name, item in STYLES.items()} | {"내 그림": "장면마다 내가 가진 그림 파일을 넣기"}},
             {"item": "길이", "default": "8~10분", "options": ["3분 요약", "8~10분", "15분 심층"]},
             {"item": "목소리", "default": "supertonic", "options": {name: setting["label"] + (" · 본인 키와 요금 필요, 해설 문장이 전송됨" if setting["external"] else " · 무료") for name, setting in ENGINES.items()}},
             {"item": "진행 속도", "default": "1.0", "options": ["1.0 차분하게", "1.08 뉴스처럼 빠르게"]},
@@ -654,6 +833,10 @@ def main():
     sample = commands.add_parser("template", help="대본 JSON 예시 출력")
     sample.add_argument("--format", choices=tuple(FORMATS), default="anchor", help="anchor는 앵커 단독, interview는 앵커와 전문가 대담")
     commands.add_parser("options", help="영상을 만들기 전에 사용자에게 보여 줄 선택지")
+    draw = commands.add_parser("illustrate", help="장면의 art 문장으로 그림을 그려 대본에 넣기 (이미지 API 키와 요금 필요)")
+    draw.add_argument("script")
+    draw.add_argument("--style", required=True, choices=tuple(name for name, item in STYLES.items() if item["prompt"]))
+    draw.add_argument("--redo", action="store_true", help="이미 그린 장면도 다시 그립니다")
     check = commands.add_parser("check", help="대본을 검사하고 길이를 추정")
     check.add_argument("script")
     make = commands.add_parser("build", help="대본으로 mp4, 자막, 표지 이미지를 생성")
@@ -677,6 +860,8 @@ def main():
             result = template(args.format)
         elif args.command == "options":
             result = options()
+        elif args.command == "illustrate":
+            result = illustrate(args.script, args.style, redo=args.redo)
         elif args.command == "check":
             script = load_script(args.script)
             result = {"valid": True, "format": script.get("format", "anchor"), "scenes": len(script["scenes"]), "turns": len(turns(script)),
@@ -685,7 +870,8 @@ def main():
         else:
             result = build(load_script(args.script), args.output, voice=args.voice, speed=args.speed, engine=args.tts,
                            voice_id=args.voice_id, base=Path(args.script).resolve().parent,
-                           music=args.music, music_volume=args.music_volume, music_credit=args.music_credit)
+                           music=args.music, music_volume=args.music_volume, music_credit=args.music_credit,
+                           cache=HOME / "speech-cache")
     except BroadcastError as error:
         print(f"방송 제작 실패: {error}", file=sys.stderr)
         return 1

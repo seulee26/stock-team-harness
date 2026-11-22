@@ -81,7 +81,8 @@ class BroadcastTest(unittest.TestCase):
             self.assertEqual(json.loads((Path(folder) / "show.manifest.json").read_text(encoding="utf-8")), manifest)
         self.assertEqual((manifest["scenes"], manifest["seconds"]), (6, round(6 * (2.5 + broadcast.PAUSE), 1)))
         programs = [call[0] for call in calls]
-        self.assertEqual((programs.count("chrome"), programs.count("tts"), programs.count("ffprobe"), programs.count("ffmpeg")), (7, 6, 6, 7))
+        self.assertEqual((programs.count("chrome"), programs.count("tts"), programs.count("ffprobe"), programs.count("ffmpeg")), (9, 6, 6, 7))
+        self.assertEqual(sum("concat" in call for call in calls), 2)
         self.assertTrue(any("overlay=x=" in part for call in calls for part in call))
         self.assertIn("가나다", broadcast.tape_html(broadcast.template()))
         spoken = [call[2] for call in calls if call[0] == "tts"]
@@ -199,6 +200,63 @@ class BroadcastTest(unittest.TestCase):
         self.assertEqual(set(choices["진행 방식"]["options"]), {"anchor", "interview"})
         self.assertEqual(set(choices["목소리"]["options"]), set(broadcast.ENGINES))
         self.assertIn("배경 음악", choices)
+
+    def test_items_come_in_one_by_one_and_pictures_follow_the_layout(self):
+        script = sample()
+        self.assertEqual(broadcast.reveal_plan(script), [[None], [1, 2, 3], [None], [None], [None], [None]])
+        page = broadcast.scene_html(script, 2, shown=1)
+        self.assertEqual(page.count('<li class="wait">'), 2)
+        script["reveal"] = False
+        self.assertEqual(broadcast.reveal_plan(script)[1], [None])
+        talk = broadcast.validate(broadcast.template("interview"))
+        self.assertEqual(broadcast.reveal_plan(talk)[2:6], [[1], [2], [2], [3]])
+        picture = "data:image/webp;base64,AAAA"
+        self.assertIn('class="cols"', broadcast.scene_html(script, 2, art=picture))
+        self.assertIn('class="backdrop"', broadcast.scene_html(script, 1, art=picture))
+        self.assertIn('class="art corner"', broadcast.scene_html(script, 5, art=picture))
+        script["style"] = "3d"
+        self.assertIn('class="backdrop clear"', broadcast.scene_html(script, 1, art=picture))
+        self.assertNotIn("<img", broadcast.scene_html(script, 2))
+
+    def test_illustrate_draws_only_scenes_with_art_and_keeps_the_key_out(self):
+        sent = []
+
+        def post(url, headers, body):
+            sent.append((url, headers, body))
+            return {"data": [{"b64_json": "QUJDRA=="}]}
+
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "show.script.json"
+            script = broadcast.template()
+            script["scenes"][1]["art"] = "server racks with cooling pipes"
+            path.write_text(json.dumps(script, ensure_ascii=False), encoding="utf-8")
+            result = broadcast.illustrate(path, "3d", post=post, environ={"OPENAI_API_KEY": "example-key"})
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            again = broadcast.illustrate(path, "3d", post=post, environ={"OPENAI_API_KEY": "example-key"})
+            self.assertEqual((Path(folder) / "show.art" / "3d-02.webp").read_bytes(), b"ABCD")
+            for style, environ in (("board", {"OPENAI_API_KEY": "example-key"}), ("3d", {})):
+                with self.assertRaises(broadcast.BroadcastError):
+                    broadcast.illustrate(path, style, post=post, environ=environ)
+        self.assertEqual((result["drawn"], result["scenesWithoutArt"], again["drawn"], again["kept"]), ([2], [1, 3, 4, 5, 6], [], [2]))
+        self.assertEqual((saved["style"], saved["scenes"][1]["image"]), ("3d", "show.art/3d-02.webp"))
+        self.assertEqual(len(sent), 1)
+        self.assertIn("server racks with cooling pipes", sent[0][2]["prompt"])
+        self.assertIn("no real people", sent[0][2]["prompt"])
+        self.assertEqual(sent[0][2]["background"], "transparent")
+        self.assertNotIn("example-key", json.dumps([result, saved], ensure_ascii=False))
+
+    def test_paid_speech_is_reused_from_the_cache(self):
+        calls = []
+
+        def make():
+            calls.append(1)
+            return b"audio" * 100
+
+        with TemporaryDirectory() as folder:
+            first = broadcast.cached_speech(["typecast", "v", "문장"], make, folder)
+            second = broadcast.cached_speech(["typecast", "v", "문장"], make, folder)
+            broadcast.cached_speech(["typecast", "v", "다른 문장"], make, folder)
+        self.assertEqual((first, len(calls)), (second, 2))
 
     def test_build_refuses_missing_tools_and_bad_output(self):
         script = sample()

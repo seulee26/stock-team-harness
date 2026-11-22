@@ -42,7 +42,7 @@ flowchart LR
 |---|---|
 | `quant.py` | 사용자가 준 일봉으로 백테스트와 수량 계산을 합니다. 네트워크와 주문 경로가 없습니다. |
 | `connectors.py` | OpenDART와 FRED의 고정된 HTTPS 호스트에만 연결합니다. 리디렉션을 따르지 않고, 키는 환경 변수에서만 읽으며 출력과 오류에 넣지 않습니다. |
-| `broadcast.py` | 대본 JSON을 2D 슬라이드 해설 영상으로 만듭니다. 기본은 내 PC의 Chrome, ffmpeg, 선택 설치한 TTS(Supertonic)만 실행하고 모델 API와 외부 업로드 경로가 없습니다. 사용자가 `--tts typecast`나 `--tts elevenlabs`를 고르면 해설 문장만 해당 서비스의 고정된 HTTPS 호스트로 보내고, 키는 환경 변수에서만 읽습니다. |
+| `broadcast.py` | 대본 JSON을 2D 슬라이드 해설 영상으로 만듭니다. 기본은 내 PC의 Chrome, ffmpeg, 선택 설치한 TTS(Supertonic)만 실행하고 모델 API와 외부 업로드 경로가 없습니다. 사용자가 `--tts typecast`나 `--tts elevenlabs`를 고르면 해설 문장만 해당 서비스의 고정된 HTTPS 호스트로 보내고, 키는 환경 변수에서만 읽습니다. `illustrate`는 사용자가 실행할 때만 장면의 그림 설명 문장을 OpenAI 이미지 API로 보냅니다. |
 | `music.py` | Openverse 공개 API에서 CC0, 퍼블릭 도메인, CC BY 음악만 찾고, 고른 곡을 HTTPS로 받아 라이선스 기록과 함께 저장합니다. 키가 필요 없고 다른 라이선스의 곡은 받지 않습니다. |
 | 에이전트 스토어 | MCP 게이트웨이 등록 방법만 안내합니다. 등록과 로그인은 사용자가 자신의 AI 프로그램에서 직접 합니다. |
 

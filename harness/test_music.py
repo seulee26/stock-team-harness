@@ -85,7 +85,7 @@ class MusicTest(unittest.TestCase):
         self.assertIn("sidechaincompress", " ".join(mix))
         self.assertIn("volume=0.140", " ".join(mix))
         self.assertEqual(manifest["music"]["credit"], "음악: Breaking News 1 · Sascha Ende · CC BY 4.0")
-        self.assertIn("음악: Breaking News 1 · Sascha Ende · CC BY 4.0", pages[6])
+        self.assertTrue(any("음악: Breaking News 1 · Sascha Ende · CC BY 4.0" in page for page in pages))
         self.assertNotIn("음악:", script["scenes"][-1].get("note") or "")
 
 
