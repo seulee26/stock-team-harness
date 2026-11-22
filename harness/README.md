@@ -193,6 +193,16 @@ python3 harness/connectors.py evaluate owner/repo --license MIT --live-orders no
 - `bars`는 사용자가 설치한 yfinance나 FinanceDataReader를 별도 프로세스로 불러 `date,close` CSV를 만듭니다. 다른 파이썬에 설치했다면 `STOCK_HARNESS_DATA_PYTHON`으로 경로를 지정합니다.
 - `catalog`는 오픈소스 28개의 점수, 판정, 반영 범위를 보여 줍니다. `evaluate`는 새 후보를 같은 기준으로 채점합니다.
 
+## 리포트 만들기
+
+```bash
+python3 harness/report.py render 입력.json reports/2026-11-20-company-NVDA.html --pdf
+python3 harness/report.py check reports/2026-11-20-company-NVDA.html
+```
+
+- `render`는 리포트 종류와 관계없이 공통 템플릿으로 HTML을 만들고 `--pdf`를 붙이면 PDF도 만듭니다. 입력 JSON의 형식은 `us-stock-research` 스킬의 리포트 생성 안내에 있습니다.
+- `check`는 HTML이 공통 템플릿으로 만들어졌는지 확인합니다. 직접 쓴 HTML이면 종료 코드 1과 함께 다시 만드는 방법을 알려 줍니다.
+
 ## 리포트 해설 영상
 
 ```bash

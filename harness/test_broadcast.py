@@ -81,8 +81,8 @@ class BroadcastTest(unittest.TestCase):
             self.assertEqual(json.loads((Path(folder) / "show.manifest.json").read_text(encoding="utf-8")), manifest)
         self.assertEqual((manifest["scenes"], manifest["seconds"]), (6, round(6 * (2.5 + broadcast.PAUSE), 1)))
         programs = [call[0] for call in calls]
-        self.assertEqual((programs.count("chrome"), programs.count("tts"), programs.count("ffprobe"), programs.count("ffmpeg")), (9, 6, 6, 7))
-        self.assertEqual(sum("concat" in call for call in calls), 2)
+        self.assertEqual((programs.count("chrome"), programs.count("tts"), programs.count("ffprobe"), programs.count("ffmpeg")),
+                         (1 + sum(len(broadcast.caption_chunks(scene["narration"])) for scene in broadcast.template()["scenes"]), 6, 6, 7))
         self.assertTrue(any("overlay=x=" in part for call in calls for part in call))
         self.assertIn("가나다", broadcast.tape_html(broadcast.template()))
         spoken = [call[2] for call in calls if call[0] == "tts"]
@@ -257,6 +257,26 @@ class BroadcastTest(unittest.TestCase):
             second = broadcast.cached_speech(["typecast", "v", "문장"], make, folder)
             broadcast.cached_speech(["typecast", "v", "다른 문장"], make, folder)
         self.assertEqual((first, len(calls)), (second, 2))
+
+    def test_captions_break_at_sentences_and_commas_and_show_on_screen(self):
+        lines = broadcast.caption_chunks("크리도는 육십칠 퍼센트, 컴포트 시스템즈는 약 오십 퍼센트, 엔벤트는 사십오 퍼센트 내려와 있습니다. 가장 덜 내린 것은 비바입니다.")
+        self.assertEqual(lines, ["크리도는 육십칠 퍼센트, 컴포트 시스템즈는 약 오십 퍼센트,", "엔벤트는 사십오 퍼센트 내려와 있습니다.", "가장 덜 내린 것은 비바입니다."])
+        self.assertTrue(all(len(line) <= broadcast.CAPTION_CHARS for line in broadcast.caption_chunks("가" * 100)))
+        script = sample()
+        page = broadcast.scene_html(script, 2, spoken="핵심은 세 가지입니다.")
+        self.assertIn('class="caption say">핵심은 세 가지입니다.', page)
+        self.assertIn(script["disclaimer"], page.split('class="frame')[0])
+        calls = []
+
+        def execute(command):
+            calls.append([str(part) for part in command])
+            return "2.0\n" if str(command[0]) == "ffprobe" else ""
+
+        tools = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe", "browser": "chrome", "tts": "tts"}
+        script["captions"] = False
+        with TemporaryDirectory() as folder:
+            broadcast.build(script, Path(folder) / "plain.mp4", execute=execute, tools=tools)
+        self.assertEqual(sum(call[0] == "chrome" for call in calls), 9)
 
     def test_build_refuses_missing_tools_and_bad_output(self):
         script = sample()

@@ -9,7 +9,7 @@
 
 ## 생성과 전달
 
-아래 구조의 UTF-8 JSON을 임시 파일에 작성하고 `python3 <스킬 폴더>/scripts/render_report.py <입력.json> <결과.html>`로 렌더링한다. 일반 저장 경로는 현재 작업 폴더의 `reports/`다. 사용자 지정 위치가 있으면 그 위치를 쓰고, 같은 경로를 덮어쓰라는 요청이 있으면 `--overwrite`를 붙인다. 채팅에 핵심 결론과 HTML 링크를 남긴다.
+아래 구조의 UTF-8 JSON을 임시 파일에 작성하고, 패키지 루트에서 `python3 harness/report.py render <입력.json> <결과.html>`로 렌더링한다(PDF도 받으려면 `--pdf`). 하네스 폴더가 없는 환경에서는 `python3 <스킬 폴더>/scripts/render_report.py <입력.json> <결과.html>`를 쓴다. 리포트 종류와 관계없이 모든 리포트를 이 방법으로 만들고 HTML을 직접 써서 만들지 않는다. `python3 harness/report.py check <결과.html>`로 표준 디자인인지 확인한다. 일반 저장 경로는 현재 작업 폴더의 `reports/`다. 사용자 지정 위치가 있으면 그 위치를 쓰고, 같은 경로를 덮어쓰라는 요청이 있으면 `--overwrite`를 붙인다. 채팅에 핵심 결론과 HTML 링크를 남긴다.
 
 | 필드 | 입력 |
 | --- | --- |

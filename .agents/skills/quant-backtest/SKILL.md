@@ -23,6 +23,7 @@ description: 이동평균, 모멘텀, 돌파 같은 규칙 기반 전략을 일�
 - 기본값을 썼으면 조사를 시작한다고 알리는 첫 답에 어떤 기본값을 썼는지 한 줄로 적고, 결과 첫머리에도 남긴다.
 - 깊이에 따라 범위를 정한다. 한 장 요약은 한 번 실행한 결과만 보여 준다. 표준은 비용 두 배(`--cost-bps 10`)와 파라미터 두 조합을 더 돌린다. 골든크로스면 그 두 조합 중 하나가 50일·200일이다. `demo`도 `backtest`와 같은 옵션(`--strategy`, `--fast`, `--slow`, `--lookback`, `--cost-bps`)을 받는다. 심층은 `quant-research` 역할의 과최적화 점검까지 한다. 아래 순서에 적힌 역할은 표준 깊이 기준이며, 깊이가 다르면 이 줄이 우선한다.
 - 채팅 답변을 고르면 파일을 만들지 않는다. 파일은 사용자가 정한 폴더에, 정하지 않았으면 작업 폴더의 `reports/`에 `YYYY-MM-DD-리포트종류-대상.html`로 저장하고 경로를 알려 준다. 예: `2026-11-20-company-NVDA.html`, `2026-11-20-sector-반도체.html`.
+- 리포트 파일은 항상 같은 디자인으로 만든다. 내용을 JSON으로 정리해 `python3 harness/report.py render 입력.json 출력.html`(PDF도 받으려면 `--pdf`)로 만들고, HTML을 직접 써서 만들지 않는다. 만든 뒤 `python3 harness/report.py check 출력.html`로 확인한다.
 - 파일을 만들었으면 끝에 Gmail로도 받을지 한 번 묻고, 원하면 `report-email` 스킬로 넘긴다.
 - 리서치 위키가 만들어져 있으면(`python3 harness/wiki.py status`가 성공하면) 파일을 위키에 넣을지도 함께 묻고, 원하면 `research-wiki` 스킬로 넘긴다. 방식이 drive-connector인데 Drive 커넥터 도구가 보이지 않으면 묻지 않는다.
 - 역할 이름은 Claude Code에서 `us-stock-team:` 접두사가 붙어 보일 수 있다. 같은 역할이다.

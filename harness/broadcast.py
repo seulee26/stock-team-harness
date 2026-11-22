@@ -45,6 +45,7 @@ WIDTH, HEIGHT, SCALE = 1280, 720, 1.5
 PAUSE = 0.7
 TURN_PAUSE = 0.3
 MAX_TURN = 600
+CAPTION_CHARS = 34
 FORMATS = {"anchor": "앵커 한 명이 전달", "interview": "앵커와 전문가의 대담"}
 STYLES = {
     "board": {"label": "방송 보드 · 그림 없이 숫자와 표 중심 (무료)", "prompt": None},
@@ -109,8 +110,10 @@ table.compact{font-size:21px}table.compact td{padding:7px 12px}table.compact th{
 .lower{position:absolute;left:0;right:0;bottom:44px;height:64px;display:flex;align-items:center;background:#f4f7fb;color:#0a1322}
 .chip{height:100%;display:flex;align-items:center;padding:0 20px;background:#ffd400;font-size:21px;font-weight:800}
 .caption{flex:1;padding:0 18px;font-size:25px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.caption.say{font-size:27px;font-weight:700;letter-spacing:-.01em}
+.top .fine{padding:0 18px;font-size:15px;color:#8fa3b8;white-space:nowrap}
 .fine{padding-right:18px;font-size:15px;color:#44566b;white-space:nowrap}
-.lower.cast .fine{padding-right:150px}
+.lower.cast .caption{margin-right:150px}
 .presenter{position:absolute;right:22px;bottom:44px;width:122px;height:122px;border-radius:50%;background:#ffe3d8;border:4px solid #ffd400;overflow:hidden}
 .presenter img{width:118%;margin-left:-9%;display:block}
 .panel{position:absolute;right:20px;bottom:44px;display:flex;gap:12px;align-items:flex-end}
@@ -119,7 +122,7 @@ table.compact{font-size:21px}table.compact td{padding:7px 12px}table.compact th{
 .guest span{line-height:96px;font-size:44px;font-weight:800;color:#0a1322}
 .guest b{display:block;margin-top:-14px;position:relative;padding:3px 0;font-size:15px;font-weight:800;color:#0a1322;background:#dbe6f3;border-radius:4px}
 .guest.on{opacity:1}.guest.on img,.guest.on span{border-color:#ffd400;width:116px;height:116px}.guest.on b{background:#ffd400}
-.lower.talk2 .fine{padding-right:268px}.lower.talk3 .fine{padding-right:392px}.lower.talk4 .fine{display:none}
+.lower.talk2 .caption{margin-right:268px}.lower.talk3 .caption{margin-right:392px}.lower.talk4 .caption{margin-right:516px}
 .tape{position:absolute;left:0;right:0;bottom:0;height:44px;background:#03060c;border-top:2px solid #e11d2e}
 .cols{flex:1;min-height:0;display:grid;grid-template-columns:1.5fr 1fr;gap:30px;align-items:center;margin-top:14px}
 .cols .body{margin-top:0;height:100%}.cols li{font-size:26px}.cols .card .value{font-size:28px}
@@ -332,7 +335,7 @@ def cast_pictures(script, base=None):
     return {key: picture_uri(person.get("image"), base) for key, person in (script.get("speakers") or {}).items()}
 
 
-def scene_html(script, number, presenter=None, cast=None, active=None, shown=None, art=None):
+def scene_html(script, number, presenter=None, cast=None, active=None, shown=None, art=None, spoken=None):
     scene = script["scenes"][number - 1]
     sub = f'<div class="sub">{cell(scene["sub"])}</div>' if scene.get("sub") else ""
     note = f'<div class="note-line">{cell(scene["note"])}</div>' if scene.get("note") else ""
@@ -364,11 +367,35 @@ def scene_html(script, number, presenter=None, cast=None, active=None, shown=Non
         f'<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>{CSS}</style></head>'
         f'<body class="{scene["kind"]}"><div class="top"><div class="badge">{cell(script.get("program") or "리서치 브리핑")}</div>'
         f'<div class="program">{cell(scene.get("eyebrow") or script["title"])}</div>'
+        f'<div class="fine">{cell(script["disclaimer"])}</div>'
         f'<div class="clock">{cell(script["as_of"])} · {number} / {len(script["scenes"])}</div></div>{backdrop}'
         f'<div class="frame {layout}"><h1>{cell(scene["heading"])}</h1>{sub}{body}</div>'
-        f'<div class="lower{lower}"><div class="chip">{cell(chip)}</div><div class="caption">{cell(caption)}</div>'
-        f'<div class="fine">{cell(script["disclaimer"])}</div></div>{people}<div class="tape"></div></body></html>'
+        f'<div class="lower{lower}"><div class="chip">{cell(chip)}</div>'
+        f'<div class="caption{" say" if spoken else ""}">{cell(spoken or caption)}</div></div>'
+        f'{people}<div class="tape"></div></body></html>'
     )
+
+
+def caption_chunks(words, limit=CAPTION_CHARS):
+    """Cut speech into short caption lines at sentence ends and commas, the way broadcast captions break."""
+    chunks = []
+    for sentence in (part.strip() for part in SENTENCE.findall(words) if part.strip()):
+        line = ""
+        for piece in re.findall(r"[^,，]+[,，]?\s*", sentence):
+            piece = piece.strip()
+            if line and len(line) + len(piece) + 1 > limit:
+                chunks.append(line)
+                line = piece
+            else:
+                line = (line + " " + piece).strip()
+            while len(line) > limit:
+                cut = line.rfind(" ", 0, limit + 1)
+                cut = cut if cut > limit // 2 else limit
+                chunks.append(line[:cut].strip())
+                line = line[cut:].strip()
+        if line:
+            chunks.append(line)
+    return chunks or [words]
 
 
 def reveal_plan(script):
@@ -697,14 +724,18 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
         pictures = {number: picture_uri(scene.get("image"), base) for number, scene in enumerate(script["scenes"], start=1)}
         for index, (number, speaker, words, pause) in enumerate(spoken, start=1):
             audio, part = (work / f"{index:03d}.{ext}" for ext in (sound, "mp4"))
-            stills = []
-            for step, shown in enumerate(plan[index - 1]):
-                page, image = (work / f"{index:03d}-{step}.{ext}" for ext in ("html", "png"))
-                page.write_text(scene_html(script, number, presenter, cast, speaker, shown, pictures[number]), encoding="utf-8")
+            stills, weights = [], []
+            reveal = plan[index - 1]
+            lines = caption_chunks(words) if script.get("captions", True) else [None] * len(reveal)
+            for step, line in enumerate(lines):
+                shown = reveal[min(len(reveal) - 1, step * len(reveal) // len(lines))]
+                page, image = (work / f"{index:03d}-{step:02d}.{ext}" for ext in ("html", "png"))
+                page.write_text(scene_html(script, number, presenter, cast, speaker, shown, pictures[number], line), encoding="utf-8")
                 execute((tools["browser"], "--headless=new", "--disable-gpu", "--hide-scrollbars",
                          f"--force-device-scale-factor={SCALE}", f"--window-size={WIDTH},{HEIGHT}",
                          f"--screenshot={image}", page.as_uri()))
                 stills.append(image)
+                weights.append(len(line) if line else 1)
             person = speakers.get(speaker) or {}
             if external:
                 context = (spoken[index - 2][2] if index > 1 else "", spoken[index][2] if index < len(spoken) else "")
@@ -723,11 +754,11 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
             if len(stills) == 1:
                 command = ["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-framerate", "30", "-i", stills[0], "-i", audio]
             else:
-                # Items come in one by one while the turn is spoken; the last still stays through the pause.
-                each = seconds / len(stills)
+                # Captions and items change while the turn is spoken, timed by how long each caption line is.
                 order = work / f"{index:03d}.txt"
-                order.write_text("".join(f"file '{still.name}'\nduration {each + (pause if still is stills[-1] else 0):.3f}\n"
-                                         for still in stills) + f"file '{stills[-1].name}'\n", encoding="utf-8")
+                order.write_text("".join(
+                    f"file '{still.name}'\nduration {seconds * weight / sum(weights) + (pause if still is stills[-1] else 0):.3f}\n"
+                    for still, weight in zip(stills, weights)) + f"file '{stills[-1].name}'\n", encoding="utf-8")
                 command = ["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", order, "-i", audio]
             if tape:
                 # The strip keeps moving across scene cuts because its position depends on total elapsed time.

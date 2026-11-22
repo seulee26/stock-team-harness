@@ -246,6 +246,8 @@ Claude Code 안에서 아래 두 줄을 차례로 입력합니다. 한 번 설�
 
 모든 리포트는 내보내기 전에 편집 역할이 쉬운 말과 숫자를 점검하고, 준법 역할이 표현과 고지를 점검합니다.
 
+리포트 파일은 종류와 관계없이 같은 디자인으로 나옵니다. `python3 harness/report.py render 입력.json 출력.html --pdf`가 공통 템플릿으로 HTML과 PDF를 만들고, `python3 harness/report.py check 출력.html`이 표준 디자인으로 만들어졌는지 확인합니다.
+
 ### 그 밖의 스킬
 
 | 스킬 | 이럴 때 씁니다 |
@@ -338,6 +340,7 @@ python3 harness/broadcast.py build 대본.script.json 해설.mp4
 - 진행 방식은 두 가지입니다. 앵커 한 명이 전달하는 방식과, 앵커가 묻고 전문가가 답하는 대담 방식(`broadcast-interview` 스킬)입니다. 대담은 출연자마다 다른 목소리를 쓰고 화면에서 말하는 사람이 밝게 표시됩니다. 대본 예시는 `python3 harness/broadcast.py template --format interview`로 봅니다.
 - 영상을 요청하면 만들기 전에 진행 방식, 길이, 목소리, 속도, 배경 음악 선택지를 항상 보여 줍니다(`python3 harness/broadcast.py options`).
 - 화면 스타일을 고를 수 있습니다. 방송 보드(그림 없음, 무료), 2D 일러스트, 3D 오브젝트 세 가지입니다. 그림이 들어가는 두 스타일은 `python3 harness/broadcast.py illustrate 대본.script.json --style 3d`가 장면의 `art` 문장으로 그림을 그립니다. 본인의 `OPENAI_API_KEY`가 필요하고 그림 한 장마다 요금이 들며, 그림 설명 문장만 OpenAI로 전송됩니다. 가진 그림을 장면의 `image`에 직접 넣어도 됩니다.
+- 화면 아래에 지금 말하는 문장이 자막으로 나옵니다. 문장 끝과 쉼표에서 끊어 한 줄씩 보여 주고, 대담에서는 말하는 사람의 이름이 옆에 표시됩니다. 대본에 `"captions": false`를 적으면 장면 제목 자막으로 바뀝니다. 자막 파일(`.vtt`)도 함께 나옵니다.
 - 글머리표, 카드, 막대, 표의 항목은 해설에 맞춰 하나씩 나타납니다. 대본에 `"reveal": false`를 적으면 끕니다.
 - Typecast나 ElevenLabs 음성은 한 번 만든 문장을 내 PC에 보관해, 그림만 바꿔 다시 만들 때 요금이 다시 들지 않습니다.
 - 화면은 주식 방송 형식의 2D 화면입니다. 위에 프로그램 이름과 기준일, 가운데에 제목·글머리표·표·막대·카드 장면, 아래에 한 줄 자막과 흐르는 시세 띠가 나옵니다. 상승은 빨강, 하락은 파랑으로 표시합니다. 시세 띠는 실시간이 아니라 리포트 기준일의 값입니다. 장면은 HTML로 그려 Chrome으로 캡처합니다.
@@ -640,6 +643,7 @@ python3 service/launch.py
 | `claude/us-stock-team/` | Claude Code 플러그인 (스킬, 에이전트) |
 | `.agents/skills/`, `.codex/agents/` | Codex용 스킬과 에이전트 |
 | `harness/desk.py` | 리포트 목록, 투자 논지·의견·일정 기록 |
+| `harness/report.py` | 모든 리포트를 같은 디자인의 HTML·PDF로 만들기, 표준 디자인 확인 |
 | `harness/mailer.py` | 리포트를 내 Gmail로 보내기 |
 | `harness/broadcast.py` | 리포트 해설 영상 만들기 (방송 형식 화면, TTS, 자막, 배경 음악) |
 | `harness/music.py` | 다시 써도 되는 배경 음악 찾기와 라이선스 기록 |
