@@ -300,7 +300,8 @@ python3 harness/wiki.py notion-entry reports/2026-11-20-company-NVDA.html --kind
 
 - "지난번에 엔비디아 뭐라고 했지?"라고 물으면 새로 조사하기 전에 위키부터 봅니다.
 - "위키 정리해 줘"라고 하면 오래된 문서, 끊어진 링크, 중복 문서를 찾아 줍니다. 지우거나 합치는 일은 확인한 뒤에만 합니다.
-- Notion에는 리포트 전문이 아니라 결론, 목차, 원본 위치만 든 짧은 기록을 넣습니다. 프로그램이 내 PC에서 기록을 만들고, AI가 Notion 커넥터로 데이터베이스에 한 행을 추가합니다. 예시 리포트 한 건은 원문 약 5만 4천 자가 약 1,100자 기록이 됐습니다. 토큰을 얼마나 아끼는지는 따로 측정하지 않았습니다.
+- Notion에는 리포트 한 건을 페이지 하나로 넣고 리포트 기준일의 주차로 묶습니다. `python3 harness/wiki.py notion-report 리포트.json --kind sector --subject 대상 --summary "결론" --date 2026-11-20`이 리포트 JSON에서 페이지 속성(제목, 주차, 기준일, 종류, 대상, 결론, 태그, 원본, 영상)과 본문을 내 PC에서 만들고, AI가 Notion 커넥터로 `리서치 리포트` 데이터베이스에 넣습니다. 주차는 `2026-W47 · 11.16–11.22`처럼 ISO 주차와 날짜 범위이고, 데이터베이스에는 주차별 보드, 전체 표, 달력 보기를 둡니다.
+- 결론만 짧게 넣고 싶으면 `notion-entry`를 씁니다. 리포트 전문이 아니라 결론, 목차, 원본 위치만 든 짧은 기록입니다. 프로그램이 내 PC에서 기록을 만들고, AI가 Notion 커넥터로 데이터베이스에 한 행을 추가합니다. 예시 리포트 한 건은 원문 약 5만 4천 자가 약 1,100자 기록이 됐습니다. 토큰을 얼마나 아끼는지는 따로 측정하지 않았습니다.
 - 내 PC나 드라이브 위키를 쓰면서 Notion에도 함께 넣을 수 있습니다.
 - 보유 수량이나 계좌 정보가 든 리포트는 구글 드라이브와 Notion 위키에 넣지 않습니다.
 
@@ -337,7 +338,7 @@ python3 harness/broadcast.py check 대본.script.json
 python3 harness/broadcast.py build 대본.script.json 해설.mp4
 ```
 
-- 진행 방식은 두 가지입니다. 앵커 한 명이 전달하는 방식과, 앵커가 묻고 전문가가 답하는 대담 방식(`broadcast-interview` 스킬)입니다. 대담은 출연자마다 다른 목소리를 쓰고 화면에서 말하는 사람이 밝게 표시됩니다. 대본 예시는 `python3 harness/broadcast.py template --format interview`로 봅니다.
+- 진행 방식은 두 가지입니다. 앵커 한 명이 전달하는 방식과, 앵커가 묻고 전문가가 답하는 대담 방식(`broadcast-interview` 스킬)입니다. 대담은 출연자마다 다른 목소리를 쓰고 화면에서 말하는 사람이 밝게 표시됩니다. Typecast를 쓰면 앵커가 아닌 출연자에게 `Announcer`(아나운서) 태그 목소리를 자동으로 배정합니다. 후보는 `python3 harness/broadcast.py voices --tag Announcer`로 보고, 고정할 목소리는 내 PC의 `~/.local/share/stock-team/broadcast/settings.json`에 적습니다. 대본 예시는 `python3 harness/broadcast.py template --format interview`로 봅니다.
 - 영상을 요청하면 만들기 전에 진행 방식, 길이, 목소리, 속도, 배경 음악 선택지를 항상 보여 줍니다(`python3 harness/broadcast.py options`).
 - 화면 스타일을 고를 수 있습니다. 방송 보드(그림 없음, 무료), 2D 일러스트, 3D 오브젝트 세 가지입니다. 그림이 들어가는 두 스타일은 `python3 harness/broadcast.py illustrate 대본.script.json --style 3d`가 장면의 `art` 문장으로 그림을 그립니다. 본인의 `OPENAI_API_KEY`가 필요하고 그림 한 장마다 요금이 들며, 그림 설명 문장만 OpenAI로 전송됩니다. 가진 그림을 장면의 `image`에 직접 넣어도 됩니다.
 - 화면 아래에 지금 말하는 문장이 자막으로 나옵니다. 문장 끝과 쉼표에서 끊어 한 줄씩 보여 주고, 대담에서는 말하는 사람의 이름이 옆에 표시됩니다. 대본에 `"captions": false`를 적으면 장면 제목 자막으로 바뀝니다. 자막 파일(`.vtt`)도 함께 나옵니다.

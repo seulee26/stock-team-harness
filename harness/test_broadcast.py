@@ -179,8 +179,40 @@ class BroadcastTest(unittest.TestCase):
             script["speakers"]["expert"]["voice_id"] = "tc_expert0001"
             broadcast.build(script, Path(folder) / "talk.mp4", engine="typecast", execute=execute, tools=tools,
                             post=lambda url, headers, body: sent.append(body["voice_id"]) or b"audio" * 100,
-                            environ={"TYPECAST_API_KEY": "example-key", "TYPECAST_VOICE_ID": "tc_anchor0001"})
+                            environ={"TYPECAST_API_KEY": "example-key", "TYPECAST_VOICE_ID": "tc_anchor0001"}, settings={})
         self.assertEqual(sent[:2], ["tc_anchor0001", "tc_expert0001"])
+
+    def test_experts_take_announcer_tagged_voices_and_anchor_keeps_its_own(self):
+        listed = [
+            {"voice_id": "tc_eng000001", "voice_name": {"eng": "Hermes", "kor": "헤르메스"}, "gender": "male", "age": "middle_age", "use_cases": ["Announcer"]},
+            {"voice_id": "tc_kor000001", "voice_name": {"eng": "Jinsub", "kor": "송진섭 앵커"}, "gender": "male", "age": "middle_age", "use_cases": ["Announcer"]},
+            {"voice_id": "tc_kor000002", "voice_name": {"eng": "Lee", "kor": "이승주 기자"}, "gender": "male", "age": "young_adult", "use_cases": ["Announcer"]},
+            {"voice_id": "tc_docu00001", "voice_name": {"eng": "Doc", "kor": "다큐"}, "gender": "male", "age": "middle_age", "use_cases": ["Documentary"]},
+        ]
+        asked = []
+
+        def get(url, headers):
+            asked.append(url)
+            if "/v3/voices" in url:
+                return listed
+            return [{"voice_id": "tc_docu00001"}, {"voice_id": "tc_kor000002"}, {"voice_id": "tc_kor000001"}]
+
+        script = broadcast.validate(broadcast.template("interview"))
+        script["speakers"]["guest"] = {"name": "AI 전략가", "voice": "M1", "gender": "male"}
+        voices = broadcast.cast_voices(script, "typecast", "tc_anchor0001", "example-key", settings={}, get=get)
+        self.assertEqual(voices, {"anchor": "tc_anchor0001", "expert": "tc_kor000001", "guest": "tc_kor000002"})
+        self.assertIn("use_cases=Announcer", asked[0])
+        pinned = broadcast.cast_voices(script, "typecast", "tc_anchor0001", "example-key",
+                                       settings={"typecast": {"anchor": "tc_mine00001", "experts": ["tc_pin000001"]}}, get=get)
+        self.assertEqual((pinned["anchor"], pinned["expert"]), ("tc_mine00001", "tc_pin000001"))
+        script["speakers"]["expert"]["voice_tag"] = "Rapper"
+        with self.assertRaises(broadcast.BroadcastError):
+            broadcast.cast_voices({"speakers": {"expert": script["speakers"]["expert"]}}, "typecast", "tc_anchor0001", "example-key",
+                                  settings={}, get=lambda url, headers: [])
+        broken = broadcast.template("interview")
+        broken["speakers"]["expert"]["age"] = "baby"
+        with self.assertRaises(broadcast.BroadcastError):
+            broadcast.validate(broken)
 
     def test_interview_script_rules_and_options(self):
         cases = (

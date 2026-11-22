@@ -152,7 +152,7 @@ python3 harness/mailer.py send report.html report.pdf --subject "[기업 분석]
 
 ## 리서치 위키
 
-`wiki.py`는 사용자가 고른 폴더에 리서치 위키를 만들고 관리합니다. 네트워크를 쓰지 않습니다. 구글 드라이브는 PC에 동기화된 폴더 경로를 주거나, 커넥터 방식을 골라 AI 프로그램의 Drive 커넥터로 관리합니다. Notion은 `notion-entry`가 결론·목차·원본 위치만 든 짧은 기록(속성과 본문)을 만들고, AI 프로그램의 Notion 커넥터가 데이터베이스에 넣습니다. `notion-entry`는 아무것도 전송하지 않으며 보유 내역이 든 파일은 거절합니다.
+`wiki.py`는 사용자가 고른 폴더에 리서치 위키를 만들고 관리합니다. 네트워크를 쓰지 않습니다. 구글 드라이브는 PC에 동기화된 폴더 경로를 주거나, 커넥터 방식을 골라 AI 프로그램의 Drive 커넥터로 관리합니다. Notion은 `notion-entry`가 결론·목차·원본 위치만 든 짧은 기록(속성과 본문)을 만들고, AI 프로그램의 Notion 커넥터가 데이터베이스에 넣습니다. `notion-report`는 리포트 JSON에서 주차(ISO 주차와 날짜 범위)가 붙은 페이지 속성과 본문 전체를 만들고, `notion-schema`는 데이터베이스 속성과 보기를 보여 줍니다. `notion-entry`와 `notion-report`는 아무것도 전송하지 않으며 보유 내역이 든 파일은 거절합니다.
 
 ```bash
 python3 harness/wiki.py init --mode local --path ./wiki
@@ -218,6 +218,7 @@ python3 harness/broadcast.py build 대본.script.json 해설.mp4 --voice F1
 - `--music 파일`로 배경 음악을 넣습니다. `music.py search`가 Openverse에서 CC0, 퍼블릭 도메인, CC BY 곡을 찾고 `music.py fetch <id> --out 파일`이 파일과 `.license.json`을 받습니다. 기록이 없는 음악은 `--music-credit`로 출처를 적어야 넣을 수 있습니다. `music.py`는 Openverse와 곡이 올라간 사이트의 HTTPS 주소에만 연결합니다.
 - 대담 형식은 대본에 `"format": "interview"`, `speakers`, 장면의 `dialogue`를 씁니다. `template --format interview`가 예시를 출력하고, 출연자마다 `voice`나 `voice_id`로 다른 목소리를 씁니다. `options`는 영상을 만들기 전에 사용자에게 보여 줄 선택지를 출력합니다.
 - `illustrate 대본 --style illustration|3d`는 장면의 `art` 문장으로 그림을 그려 대본 옆 `.art` 폴더에 저장하고 대본의 `image`를 채웁니다. 환경 변수 `OPENAI_API_KEY`에서만 키를 읽고, 그림 설명 문장만 OpenAI 이미지 API의 고정된 HTTPS 주소로 보냅니다. 항목은 해설에 맞춰 하나씩 나타나며 `"reveal": false`로 끕니다. 유료 음성은 `speech-cache`에 보관해 다시 만들 때 재사용합니다.
+- 대담에서 앵커가 아닌 출연자는 Typecast의 `Announcer` 태그 목소리를 받습니다. `voices --tag Announcer --gender male`로 후보를 보고, 설정 파일 `~/.local/share/stock-team/broadcast/settings.json`의 `anchor`, `expert_tag`, `experts`로 고정합니다.
 - `check`는 형식과 예상 길이, 소리 내어 읽기 어려운 표기(영문, 숫자, 기호)를 알려 줍니다. `template`은 대본 예시를 출력합니다.
 - 모델 API를 부르지 않습니다. 계좌 정보가 든 리포트는 영상으로 만들지 않습니다.
 

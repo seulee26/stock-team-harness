@@ -29,6 +29,16 @@ description: 리포트 해설 영상을 앵커와 주식 전문가가 묻고 답
 - 목소리는 두 사람이 구별되게 고른다. 오픈소스 TTS는 `F1`과 `M2`처럼 다르게, Typecast나 ElevenLabs는 출연자마다 `voice_id`를 적는다. `voice_id`가 없는 출연자는 `--voice-id`나 환경 변수의 기본 목소리를 쓴다.
 - 그림을 넣으면 말하는 사람이 밝게 표시된다. 그림이 없으면 이름 첫 글자가 나온다. 실제 인물 사진은 본인 동의 없이 쓰지 않는다.
 
+## 출연자 목소리 (Typecast)
+
+앵커는 사용자가 정한 목소리를 쓴다(`--voice-id`, 환경 변수 `TYPECAST_VOICE_ID`, 또는 설정 파일의 `anchor`). 앵커가 아닌 출연자(전문가, 애널리스트)는 Typecast에서 `Announcer`(아나운서) 태그가 붙은 목소리 중에서 고른다. 출연자에 `voice_id`를 적지 않으면 프로그램이 `Announcer` 태그 목소리를 한국어 뉴스 진행에 맞는 순서로 찾아 앵커와 겹치지 않게 배정한다. 출연자에 `gender`(male, female)와 `age`(young_adult, middle_age, elder)를 적으면 그에 맞는 목소리를 먼저 고른다. 후보는 이렇게 본다.
+
+```sh
+python3 harness/broadcast.py voices --tag Announcer --gender male --age middle_age
+```
+
+사용자가 정한 목소리는 내 PC의 설정 파일 `~/.local/share/stock-team/broadcast/settings.json`에 둔다. 예: `{"typecast": {"anchor": "tc_...", "expert_tag": "Announcer", "experts": ["tc_..."]}}`. `experts`에 적은 목소리가 있으면 태그 검색보다 먼저 쓴다. 영상의 `.manifest.json`의 `speakerVoices`에 실제로 쓴 목소리가 남는다.
+
 ## 만들기
 
 ```sh

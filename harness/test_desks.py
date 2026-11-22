@@ -534,6 +534,30 @@ class WikiTests(unittest.TestCase):
         self.assertEqual(wiki.load_config(self.config_path)["mode"], "drive-connector")
         self.assertTrue((self.base / "wiki" / "index.md").is_file())
 
+    def test_notion_report_page_is_filed_by_iso_week(self):
+        self.assertEqual(wiki.week_label("2026-11-20"), "2026-W47 · 11.16–11.22")
+        self.assertEqual(wiki.week_label("2027-01-01"), "2026-W53 · 12.28–01.03")
+        source = self.base / "report.json"
+        report = {"kind": "산업 리포트", "title": "가상 산업 | 5년", "as_of": "2026년 11월 20일 종가", "headline": "지금은 대기",
+                  "summary": ["첫 문단", "둘째 문단"], "summary_refs": [1],
+                  "metrics": [{"label": "매출", "value": "+44%", "note": "전년 대비"}],
+                  "sections": [{"title": "표", "paragraphs": ["<b>는 글자</b>"], "table": {"caption": "비교", "columns": ["가", "나"], "rows": [["1|2", "3"]]}}],
+                  "sources": [{"label": "예시", "url": "https://example.com/a"}]}
+        source.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+        page = wiki.notion_report(source, "sector", "가상 산업", "대기", "2026-11-20", ["AI"], "https://example.com/r.pdf", "https://example.com/v.mp4")
+        self.assertEqual((page["week"], page["properties"]["주차"], page["properties"]["종류"], page["properties"]["date:기준일:start"]),
+                         ("2026-W47 · 11.16–11.22", "2026-W47 · 11.16–11.22", "산업", "2026-11-20"))
+        self.assertEqual(page["title"], "가상 산업 · 가상 산업 | 5년")
+        for expected in ("**지금은 대기**", "둘째 문단 [1](https://example.com/a)", "| 1\\|2 | 3 |", "&lt;b>는 글자", "[해설 영상](https://example.com/v.mp4)",
+                         "## 출처", "투자 조언이나 권유가 아닙니다"):
+            self.assertIn(expected, page["content"])
+        private = self.base / "private.json"
+        private.write_text(json.dumps({**report, "summary": "보유 수량 10주"}, ensure_ascii=False), encoding="utf-8")
+        for arguments in ((private, "sector", "가", "요약"), (source, "movie", "가", "요약"), (self.report, "sector", "가", "요약"),
+                          (source, "sector", "가", "요약", None, (), "http://example.com/a")):
+            with self.assertRaises(wiki.HarnessError):
+                wiki.notion_report(*arguments)
+
     def test_notion_connector_mode_and_short_entry(self):
         result = wiki.init("notion-connector", config_path=self.config_path)
         self.assertIn("notion-entry", result["next"])

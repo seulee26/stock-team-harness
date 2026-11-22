@@ -118,7 +118,7 @@ export ELEVENLABS_VOICE_ID=<VOICE_ID>
 python3 harness/broadcast.py build 대본.script.json 출력.mp4 --tts elevenlabs
 ```
 
-`doctor`의 `engines`에서 어느 엔진이 준비됐는지 본다. 모델은 `TYPECAST_MODEL`(기본 ssfm-v31), `ELEVENLABS_MODEL`(기본 eleven_multilingual_v2)로 바꾼다. 속도는 Typecast 0.5~2.0, ElevenLabs 0.7~1.2다. 환경 변수가 이 세션에 보이지 않으면 사용자가 그 터미널에서 명령을 직접 실행하게 한다. 오류가 나면 오류 문장만 전하고 키를 다시 보여 달라고 하지 않는다. 다른 사람의 목소리를 복제한 목소리 ID는 본인이나 권리자의 동의가 있는 경우에만 쓴다.
+`doctor`의 `engines`에서 어느 엔진이 준비됐는지 본다. 대담에서 앵커가 아닌 출연자는 Typecast의 `Announcer` 태그 목소리를 쓴다(`broadcast-interview` 스킬). 모델은 `TYPECAST_MODEL`(기본 ssfm-v31), `ELEVENLABS_MODEL`(기본 eleven_multilingual_v2)로 바꾼다. 속도는 Typecast 0.5~2.0, ElevenLabs 0.7~1.2다. 환경 변수가 이 세션에 보이지 않으면 사용자가 그 터미널에서 명령을 직접 실행하게 한다. 오류가 나면 오류 문장만 전하고 키를 다시 보여 달라고 하지 않는다. 다른 사람의 목소리를 복제한 목소리 ID는 본인이나 권리자의 동의가 있는 경우에만 쓴다.
 
 ## 지킬 것
 

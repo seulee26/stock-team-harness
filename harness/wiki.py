@@ -276,6 +276,7 @@ def notion_entry(source, kind, subject, title, summary, day=None, tags=(), link=
         {"name": "대상", "type": "title", "value": name},
         {"name": "종류", "type": "select", "value": KINDS[kind], "options": list(KINDS.values())},
         {"name": "기준일", "type": "date", "value": day},
+        {"name": "주차", "type": "select", "value": week_label(day)},
         {"name": "제목", "type": "text", "value": title},
         {"name": "결론", "type": "text", "value": summary},
         {"name": "태그", "type": "multi_select", "value": tags},
@@ -286,6 +287,127 @@ def notion_entry(source, kind, subject, title, summary, day=None, tags=(), link=
         "sizes": {"reportChars": len(text) or None, "payloadChars": len(content) + sum(len(str(item["value"] or "")) for item in fields)},
         "next": "Notion 커넥터의 데이터베이스 '리서치 위키'에 fields를 속성으로, content를 본문으로 한 행을 만듭니다. "
                 "데이터베이스가 없으면 fields의 name과 type으로 먼저 만들고, 어디에 만들지 사용자에게 확인받습니다.",
+    }
+
+
+NOTION_DATABASE = "리서치 리포트"
+NOTION_SCHEMA = (
+    {"name": "제목", "type": "title"},
+    {"name": "주차", "type": "select", "note": "ISO 주차. 월요일 시작. 예: 2026-W47 · 11.16–11.22"},
+    {"name": "기준일", "type": "date"},
+    {"name": "종류", "type": "select", "options": list(KINDS.values())},
+    {"name": "대상", "type": "text"},
+    {"name": "결론", "type": "text"},
+    {"name": "태그", "type": "multi_select"},
+    {"name": "원본", "type": "url"},
+    {"name": "영상", "type": "url"},
+)
+
+
+def week_label(day):
+    """ISO week with its Monday-to-Sunday range, so weeks sort as text and read naturally."""
+    when = date.fromisoformat(clean_day(day))
+    year, week, weekday = when.isocalendar()
+    monday = date.fromordinal(when.toordinal() - weekday + 1)
+    sunday = date.fromordinal(monday.toordinal() + 6)
+    return f"{year}-W{week:02d} · {monday:%m.%d}–{sunday:%m.%d}"
+
+
+def notion_cell(value):
+    return " ".join(str(value).split()).replace("|", "\\|").replace("<", "&lt;")
+
+
+def notion_text(value):
+    return str(value).replace("<", "&lt;")
+
+
+def report_markdown(report, link=None, video=None):
+    """Turn report JSON (the input of report.py render) into Notion-flavored Markdown."""
+    sources = report.get("sources") or []
+
+    def cite(numbers):
+        marks = [f"[{number}]({sources[number - 1]['url']})" for number in numbers or []
+                 if isinstance(number, int) and 1 <= number <= len(sources)]
+        return (" " + " ".join(marks)) if marks else ""
+
+    def paragraphs(value):
+        items = [value] if isinstance(value, str) else list(value or [])
+        return "\n\n".join(notion_text(item) for item in items)
+
+    def table(data):
+        head = "| " + " | ".join(notion_cell(column) for column in data["columns"]) + " |"
+        rule = "| " + " | ".join("---" for _ in data["columns"]) + " |"
+        rows = ["| " + " | ".join(notion_cell(item) for item in row) + " |" for row in data["rows"]]
+        caption = f"**{notion_text(data['caption'])}**\n\n" if data.get("caption") else ""
+        return caption + "\n".join([head, rule, *rows])
+
+    out = [f'<callout icon="📌" color="blue_bg">\n**{notion_text(report["headline"])}**\n</callout>',
+           f"{notion_text(report['kind'])} · {notion_text(report['as_of'])}",
+           paragraphs(report["summary"]) + cite(report.get("summary_refs"))]
+    links = [f"[리포트 원본]({link})" if link else "", f"[해설 영상]({video})" if video else ""]
+    if any(links):
+        out.append(" · ".join(item for item in links if item))
+    if report.get("metrics"):
+        out += ["## 핵심 숫자", table({"columns": ["항목", "값", "설명"],
+                                     "rows": [[item["label"], item["value"], item.get("note", "")] for item in report["metrics"]]})]
+    if report.get("timing"):
+        out.append("## 언제 사고, 언제 팔지")
+        for item in report["timing"]:
+            out.append(f"### {notion_text(item['label'])}\n\n**{notion_text(item['trigger'])}**\n\n" + paragraphs(item["action"]) + cite(item.get("refs")))
+        if report.get("timing_note"):
+            out.append(paragraphs(report["timing_note"]))
+    for section in report.get("sections") or []:
+        block = [f"## {notion_text(section['title'])}", paragraphs(section.get("paragraphs")) + cite(section.get("refs"))]
+        if section.get("table"):
+            block.append(table(section["table"]))
+        out += [item for item in block if item.strip()]
+    if report.get("watch"):
+        out += ["## 다음에 볼 것", "\n".join(f"- **{notion_text(item['label'])}** {notion_text(item['text'])}{cite(item.get('refs'))}"
+                                           for item in report["watch"])]
+    if report.get("terms"):
+        out += ["## 용어 풀이", "\n".join(f"- **{notion_text(item['term'])}**: {notion_text(item['definition'])}" for item in report["terms"])]
+    if report.get("team"):
+        out += ["## 리서치 팀이 한 일", "\n".join(f"- **{notion_text(item['role'])}**: {notion_text(item['contribution'])}" for item in report["team"])]
+    if sources:
+        out += ["## 출처", "\n".join(f"{number}. [{notion_cell(item['label'])}]({item['url']})" for number, item in enumerate(sources, start=1))]
+    out.append("조사 기록이며 투자 조언이나 권유가 아닙니다.")
+    return "\n\n".join(out) + "\n"
+
+
+def notion_report(source, kind, subject, summary, day=None, tags=(), link=None, video=None):
+    """A full Notion page (properties and body) from report JSON. Nothing is sent anywhere."""
+    if kind not in KINDS:
+        raise HarnessError("종류는 " + ", ".join(KINDS) + " 중에서 골라 주세요.")
+    source = Path(source)
+    if source.suffix.lower() != ".json" or not source.is_file():
+        raise HarnessError("리포트 내용이 담긴 .json 파일(report.py render의 입력)을 넣어 주세요.")
+    raw = source.read_text(encoding="utf-8")
+    if HOLDINGS.search(raw):
+        raise HarnessError("보유 수량이나 계좌 정보가 들어 있는 리포트입니다. Notion에는 넣지 않습니다. 내 PC 위키를 써 주세요.")
+    try:
+        report = json.loads(raw)
+        title = line(report["title"], "제목", 200)
+        for key in ("kind", "as_of", "headline", "summary"):
+            report[key]
+    except (ValueError, KeyError, TypeError):
+        raise HarnessError("리포트 JSON에 title, kind, as_of, headline, summary가 있어야 합니다.") from None
+    for name, value in (("원본 링크", link), ("영상 링크", video)):
+        if value is not None and not re.fullmatch(r"https://[^\s<>\"']{4,500}", value):
+            raise HarnessError(f"{name}는 https:// 로 시작하는 주소여야 합니다.")
+    day, name = clean_day(day or today()), slug(subject)
+    summary = line(summary, "요약", 1500)
+    page_title = f"{subject.strip()} · {title}"[:120]
+    content = report_markdown(report, link, video)
+    return {
+        "dataScope": "notion-payload", "database": NOTION_DATABASE, "title": page_title, "week": week_label(day),
+        "properties": {"제목": page_title, "주차": week_label(day), "date:기준일:start": day, "date:기준일:is_datetime": 0,
+                       "종류": KINDS[kind], "대상": subject.strip(), "결론": summary,
+                       "태그": json.dumps([slug(tag) for tag in tags][:8], ensure_ascii=False),
+                       "원본": link, "영상": video},
+        "content": content, "sizes": {"reportChars": len(raw), "pageChars": len(content)},
+        "schema": list(NOTION_SCHEMA),
+        "next": f"Notion 커넥터로 '{NOTION_DATABASE}' 데이터베이스에 properties를 속성으로, content를 본문으로 한 페이지를 만듭니다. "
+                "주차별 보기는 '주차'로 묶은 보드입니다. 데이터베이스가 없으면 schema대로 만들고, 어디에 만들지 사용자에게 확인받습니다.",
     }
 
 
@@ -316,6 +438,16 @@ def main():
     put.add_argument("--date", help="리포트 기준일 (기본: 오늘)")
     put.add_argument("--tag", action="append", default=[])
     put.add_argument("--allow-holdings", action="store_true", help="보유 내역이 든 파일을 내 PC 위키에 넣습니다")
+    full = commands.add_parser("notion-report", help="리포트 JSON으로 Notion 페이지 전체(속성, 본문)를 만듭니다 (전송하지 않음)")
+    full.add_argument("file", help="report.py render의 입력 JSON")
+    full.add_argument("--kind", required=True, help=", ".join(KINDS))
+    full.add_argument("--subject", required=True)
+    full.add_argument("--summary", required=True, help="결론 두세 줄")
+    full.add_argument("--date", help="리포트 기준일 (기본: 오늘). 주차는 이 날짜로 정합니다")
+    full.add_argument("--tag", action="append", default=[])
+    full.add_argument("--link", help="원본 PDF 등 https 주소")
+    full.add_argument("--video", help="해설 영상 https 주소")
+    commands.add_parser("notion-schema", help="Notion 리서치 리포트 데이터베이스의 속성")
     note = commands.add_parser("notion-entry", help="Notion 데이터베이스에 넣을 짧은 기록을 만듭니다 (전송하지 않음)")
     note.add_argument("file")
     note.add_argument("--kind", required=True, help=", ".join(KINDS))
@@ -335,6 +467,13 @@ def main():
     try:
         if args.command == "init":
             result = init(args.mode, args.path, switch=args.switch)
+        elif args.command == "notion-report":
+            result = notion_report(args.file, args.kind, args.subject, args.summary, args.date, args.tag, args.link, args.video)
+        elif args.command == "notion-schema":
+            result = {"database": NOTION_DATABASE, "schema": list(NOTION_SCHEMA), "views": [
+                {"name": "주차별", "type": "board", "configure": 'GROUP BY "주차"; SORT BY "기준일" DESC'},
+                {"name": "전체", "type": "table", "configure": 'SORT BY "기준일" DESC'},
+                {"name": "달력", "type": "calendar", "configure": 'CALENDAR BY "기준일"'}]}
         elif args.command == "notion-entry":
             result = notion_entry(args.file, args.kind, args.subject, args.title, args.summary, args.date, args.tag, args.link)
         else:

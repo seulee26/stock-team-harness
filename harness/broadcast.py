@@ -23,7 +23,7 @@ import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
-from urllib import error, request
+from urllib import error, parse, request
 
 import music as music_library
 
@@ -188,6 +188,10 @@ def validate(script):
         person["name"] = text(person.get("name"), f"speakers.{key} name", 20)
         if person.get("voice", "F1") not in VOICES:
             raise BroadcastError(f"speakers.{key} voice: " + ", ".join(VOICES) + " 중 하나여야 합니다.")
+        if person.get("gender") not in (None, *GENDERS) or person.get("age") not in (None, *AGES):
+            raise BroadcastError(f"speakers.{key}: gender는 male·female, age는 young_adult·middle_age·elder 중 하나여야 합니다.")
+        if person.get("voice_tag") is not None and not re.fullmatch(r"[A-Za-z/ -]{3,40}", str(person["voice_tag"])):
+            raise BroadcastError(f"speakers.{key} voice_tag의 형식이 올바르지 않습니다. 예: Announcer")
         if person.get("voice_id") and not VOICE_ID.fullmatch(str(person["voice_id"])):
             raise BroadcastError(f"speakers.{key} voice_id의 형식이 올바르지 않습니다.")
     if script.get("format") == "interview" and len(speakers) < 2:
@@ -572,6 +576,84 @@ def illustrate(script_path, style, *, post=post_json, environ=os.environ, redo=F
             "next": "그림을 열어 글자나 로고, 실제 인물처럼 보이는 것이 없는지 확인한 뒤 build로 영상을 만듭니다."}
 
 
+SETTINGS = HOME / "settings.json"
+EXPERT_TAG = "Announcer"
+GENDERS = {"male": "남성", "female": "여성"}
+AGES = {"young_adult": "젊은", "middle_age": "중년", "elder": "노년"}
+
+
+def load_settings(path=None):
+    """Personal voice choices kept on this PC, e.g. {"typecast": {"anchor": "tc_...", "expert_tag": "Announcer"}}."""
+    path = Path(path or SETTINGS)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):
+        raise BroadcastError(f"목소리 설정 파일을 읽지 못했습니다: {path}") from None
+    return data if isinstance(data, dict) else {}
+
+
+def get_json(url, headers):
+    call = request.Request(url, headers=headers, method="GET")
+    host = url.split("/")[2]
+    try:
+        with request.build_opener(NoRedirect).open(call, timeout=60) as response:
+            return json.loads(response.read(20_000_000).decode("utf-8"))
+    except error.HTTPError as failure:
+        raise BroadcastError(f"{host} 응답 {failure.code}.") from None
+    except (error.URLError, TimeoutError, OSError, ValueError):
+        raise BroadcastError(f"{host}에 연결하지 못했습니다.") from None
+
+
+def typecast_voices(credential, tag, *, gender=None, age=None, query=None, get=get_json):
+    """Voices that carry the use-case tag, ranked by how well they match a Korean newsroom description."""
+    headers = {"X-API-KEY": credential}
+    listed = get("https://api.typecast.ai/v3/voices?" + parse.urlencode({"model": "ssfm-v31", "use_cases": tag}), headers)
+    tagged = {item["voice_id"]: item for item in listed if tag in (item.get("use_cases") or [])}
+    words = query or " ".join(part for part in ("한국어", GENDERS.get(gender, ""), AGES.get(age, ""), "아나운서, 또렷한 뉴스 진행") if part)
+    ranked = get("https://api.typecast.ai/v1/voices/recommendations?" + parse.urlencode({"query": words, "limit": 20}), headers)
+    order = [item["voice_id"] for item in ranked if item.get("voice_id") in tagged]
+    order += [voice for voice in tagged if voice not in order]
+    picks = [tagged[voice] for voice in order]
+    if gender:
+        picks = [item for item in picks if item.get("gender") == gender] or picks
+    if age:
+        picks = sorted(picks, key=lambda item: item.get("age") != age)
+    return [{"voice_id": item["voice_id"], "name": (item.get("voice_name") or {}).get("kor") or (item.get("voice_name") or {}).get("eng"),
+             "gender": item.get("gender"), "age": item.get("age"), "use_cases": item.get("use_cases")} for item in picks]
+
+
+def cast_voices(script, engine, default_voice, credential, *, settings=None, get=get_json):
+    """Give every speaker a paid-service voice: the anchor keeps the default, the others take a tagged voice."""
+    settings = (settings if settings is not None else load_settings()).get(engine, {})
+    speakers = script.get("speakers") or {}
+    chosen, used = {}, set()
+    for key, person in speakers.items():
+        if person.get("voice_id"):
+            chosen[key] = person["voice_id"]
+        elif key == "anchor" or person.get("role") == "anchor":
+            chosen[key] = settings.get("anchor") or default_voice
+        used.add(chosen.get(key))
+    for key, person in speakers.items():
+        if key in chosen:
+            continue
+        pinned = [voice for voice in (settings.get("experts") or []) if voice not in used]
+        if pinned:
+            chosen[key] = pinned[0]
+        elif engine == "typecast":
+            tag = person.get("voice_tag") or settings.get("expert_tag") or EXPERT_TAG
+            options = [item["voice_id"] for item in typecast_voices(credential, tag, gender=person.get("gender"), age=person.get("age"), get=get)
+                       if item["voice_id"] not in used]
+            if not options:
+                raise BroadcastError(f"'{tag}' 태그의 목소리를 찾지 못했습니다. speakers.{key}에 voice_id를 적어 주세요.")
+            chosen[key] = options[0]
+        else:
+            chosen[key] = default_voice
+        used.add(chosen[key])
+    return chosen
+
+
 def cloud_voice(engine, voice_id=None, environ=os.environ):
     """Return (credential, voice id, model) for a paid engine, read from the user's environment only."""
     setting = ENGINES[engine]
@@ -668,7 +750,8 @@ def mix_music(video, track, volume, seconds, *, execute=run):
 
 
 def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_id=None, execute=run, tools=None,
-          post=post_audio, environ=os.environ, base=None, music=None, music_volume=0.14, music_credit=None, cache=None):
+          post=post_audio, environ=os.environ, base=None, music=None, music_volume=0.14, music_credit=None, cache=None,
+          settings=None, get=get_json):
     if engine not in ENGINES:
         raise BroadcastError("tts는 " + ", ".join(ENGINES) + " 중 하나여야 합니다.")
     external = ENGINES[engine]["external"]
@@ -717,6 +800,7 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
                      f"--force-device-scale-factor={SCALE}", f"--window-size={tape_width(script)},44",
                      f"--screenshot={tape}", (work / "tape.html").as_uri()))
         cast = cast_pictures(script, base)
+        voices = cast_voices(script, engine, voice_id, credential, settings=settings, get=get) if external else {}
         speakers = script.get("speakers") or {}
         spoken = turns(script)
         sound = ENGINES[engine].get("suffix", "wav")
@@ -739,7 +823,7 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
             person = speakers.get(speaker) or {}
             if external:
                 context = (spoken[index - 2][2] if index > 1 else "", spoken[index][2] if index < len(spoken) else "")
-                speaking = person.get("voice_id") or voice_id
+                speaking = voices.get(speaker) or voice_id
                 audio.write_bytes(cached_speech(
                     [engine, speaking, model, speed, script.get("language", "ko"), words, context],
                     lambda: cloud_speech(engine, words, speed, credential, speaking, model, script.get("language", "ko"),
@@ -791,7 +875,7 @@ def build(script, output, *, voice=None, speed=1.0, engine="supertonic", voice_i
         "title": script["title"], "asOf": script["as_of"], "scenes": len(script["scenes"]),
         "format": script.get("format", "anchor"), "style": script.get("style", "board"), "speakers": [person["name"] for person in (script.get("speakers") or {}).values()],
         "seconds": round(total, 1), "voice": voice_id if external else voice, "speed": speed,
-        "ttsEngine": ENGINES[engine]["label"], "narrationSentTo": ENGINES[engine]["label"] if external else None,
+        "ttsEngine": ENGINES[engine]["label"], "speakerVoices": voices if external else None, "narrationSentTo": ENGINES[engine]["label"] if external else None,
         "sourceReport": script.get("source_report"),
         "music": ({key: track.get(key) for key in ("title", "creator", "license", "source", "credit")} | {"volume": music_volume}
                   if track else None),
@@ -822,7 +906,7 @@ def template(kind="anchor"):
         return {
             "title": "리포트 제목", "as_of": "기준 2026년 1월 2일 종가", "language": "ko", "format": "interview", "program": "리서치 대담",
             "source_report": "reports/example.html", "disclaimer": "정보 제공용 해설이며 투자 권유가 아닙니다",
-            "speakers": {"anchor": {"name": "AI 앵커", "voice": "F1"}, "expert": {"name": "AI 애널리스트", "voice": "M2"}},
+            "speakers": {"anchor": {"name": "AI 앵커", "voice": "F1"}, "expert": {"name": "AI 애널리스트", "voice": "M2", "voice_tag": "Announcer", "gender": "male", "age": "middle_age"}},
             "ticker": [{"label": "가나다", "value": "$100.00", "change": "+1.2%", "tone": "up"}],
             "scenes": [
                 {"kind": "title", "heading": "한 줄 결론", "dialogue": [
@@ -864,6 +948,11 @@ def main():
     sample = commands.add_parser("template", help="대본 JSON 예시 출력")
     sample.add_argument("--format", choices=tuple(FORMATS), default="anchor", help="anchor는 앵커 단독, interview는 앵커와 전문가 대담")
     commands.add_parser("options", help="영상을 만들기 전에 사용자에게 보여 줄 선택지")
+    listing = commands.add_parser("voices", help="Typecast에서 태그(기본 Announcer)가 붙은 목소리 후보 보기")
+    listing.add_argument("--tag", default=EXPERT_TAG)
+    listing.add_argument("--gender", choices=tuple(GENDERS))
+    listing.add_argument("--age", choices=tuple(AGES))
+    listing.add_argument("--limit", type=int, default=10)
     draw = commands.add_parser("illustrate", help="장면의 art 문장으로 그림을 그려 대본에 넣기 (이미지 API 키와 요금 필요)")
     draw.add_argument("script")
     draw.add_argument("--style", required=True, choices=tuple(name for name, item in STYLES.items() if item["prompt"]))
@@ -891,6 +980,12 @@ def main():
             result = template(args.format)
         elif args.command == "options":
             result = options()
+        elif args.command == "voices":
+            credential = os.environ.get("TYPECAST_API_KEY", "").strip()
+            if not credential:
+                raise BroadcastError("목소리 목록을 보려면 환경 변수 TYPECAST_API_KEY가 필요합니다.")
+            result = {"tag": args.tag, "settingsFile": str(SETTINGS),
+                      "voices": typecast_voices(credential, args.tag, gender=args.gender, age=args.age)[:max(1, min(args.limit, 50))]}
         elif args.command == "illustrate":
             result = illustrate(args.script, args.style, redo=args.redo)
         elif args.command == "check":
